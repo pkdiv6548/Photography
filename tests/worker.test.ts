@@ -146,6 +146,51 @@ test("enquiry requests without explicit consent are rejected before database acc
   assert.deepEqual(await response.json(), { error: "validation_failed" });
 });
 
+test("phone-only enquiry is stored with a NULL email when D1 is available", async () => {
+  let storedEnquiryValues: unknown[] | undefined;
+  const db = {
+    prepare(query: string) {
+      let values: unknown[] = [];
+      return {
+        bind(...args: unknown[]) {
+          values = args;
+          return this;
+        },
+        async first<T>() {
+          if (query.includes("INSERT INTO enquiry_rate_limits")) {
+            return { request_count: 1 } as T;
+          }
+          return null;
+        },
+        async run() {
+          if (query.includes("INSERT INTO enquiries")) storedEnquiryValues = values;
+          return { success: true, meta: { changes: 1 } };
+        },
+        async all<T>() {
+          return { success: true, results: [] as T[] };
+        }
+      };
+    }
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "cf-connecting-ip": "203.0.113.10" },
+      body: JSON.stringify({
+        name: "Sample Visitor",
+        phone: "+91 98765 43210",
+        service: "photography",
+        message: "Please contact me about photography services.",
+        consent: true
+      })
+    }),
+    { DB: db }
+  );
+  assert.equal(response.status, 201);
+  assert.ok(storedEnquiryValues);
+  assert.equal(storedEnquiryValues[2], null, "email column should receive SQL NULL when omitted");
+});
+
 test("enquiry form service values pass validation and fail closed when D1 is absent", async () => {
   for (const service of ["photography", "videography", "photo-editing", "video-editing"]) {
     const response = await worker.fetch(
