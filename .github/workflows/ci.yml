@@ -2,7 +2,7 @@ name: Website checks
 
 on:
   pull_request:
-    branches: [main, chore/project-foundation, feat/premium-portfolio, feat/d1-enquiry-api, feat/connect-enquiry-form]
+    branches: [main, chore/project-foundation, feat/premium-portfolio, feat/d1-enquiry-api, feat/connect-enquiry-form, fix/d1-schema-compatibility]
   push:
     branches: [main, chore/project-foundation, feat/premium-portfolio, feat/d1-enquiry-api, feat/connect-enquiry-form]
 
