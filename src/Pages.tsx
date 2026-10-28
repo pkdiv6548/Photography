@@ -1,4 +1,4 @@
-import { Aperture, ArrowLeft, ArrowRight, Camera, Clapperboard, Film, Image, LockKeyhole, Mail, ShieldCheck, WandSparkles } from "lucide-react";
+import { Aperture, ArrowLeft, ArrowRight, Camera, Clapperboard, Film, Image, LockKeyhole, ShieldCheck, WandSparkles } from "lucide-react";
 import { categories, projects } from "./data";
 
 const nav = [
@@ -37,11 +37,11 @@ export default function Pages() {
   if (path === "/services") return <SiteFrame eyebrow="WHAT WE CREATE" title="Creative Services">
     <p className="section-subtitle">Photography, filmmaking and editing for meaningful moments and brands.</p>
     <div className="services-grid">{[
-      [Camera, "Photography", "Weddings, pre-weddings, portraits, events, fashion and products."],
-      [Film, "Videography", "Cinematic wedding films, events and brand stories."],
-      [WandSparkles, "Photo editing", "Retouching, colour correction and creative finishing."],
-      [Clapperboard, "Video editing", "Cinematic cuts, colour grading, reels and short-form edits."]
-    ].map(([Icon, title, description]) => <article className="service-card" key={String(title)}><span className="service-icon large"><Icon size={25} /></span><h2>{String(title)}</h2><p>{String(description)}</p><a className="text-link" href="/contact">Ask about this service <ArrowRight size={15}/></a></article>)}</div>
+      { Icon: Camera, title: "Photography", description: "Weddings, pre-weddings, portraits, events, fashion and products." },
+      { Icon: Film, title: "Videography", description: "Cinematic wedding films, events and brand stories." },
+      { Icon: WandSparkles, title: "Photo editing", description: "Retouching, colour correction and creative finishing." },
+      { Icon: Clapperboard, title: "Video editing", description: "Cinematic cuts, colour grading, reels and short-form edits." }
+    ].map(({ Icon, title, description }) => <article className="service-card" key={title}><span className="service-icon large"><Icon size={25} /></span><h2>{title}</h2><p>{description}</p><a className="text-link" href="/contact">Ask about this service <ArrowRight size={15}/></a></article>)}</div>
   </SiteFrame>;
   if (path === "/about") return <SiteFrame eyebrow="THE CREATIVE BEHIND THE LENS" title="About Golden Films">
     <p className="section-subtitle">Golden Films is a photography, videography, photo-editing and video-editing portfolio. The owner's approved biography and real project stories will be added when supplied.</p>
