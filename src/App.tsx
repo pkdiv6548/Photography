@@ -53,6 +53,8 @@ const copy = {
     formNotice: "Your enquiry was received. We will get back to you.",
     formError: "We could not send your enquiry. Please try again later or contact us another way.",
     formRequiredContact: "Please enter an email address or phone number.",
+    consentRequired: "Please confirm that we may use these details to respond to your enquiry.",
+    consentLabel: "I agree that Golden Films may use the details above to respond to my enquiry.",
     contactDetails: "Sunil's phone, WhatsApp, email and Instagram details will be connected before launch.",
     footerLine: "Capturing moments. Crafting memories.",
     quickLinks: "Explore",
@@ -107,6 +109,8 @@ const copy = {
     formNotice: "आपकी enquiry मिल गई है। हम आपसे संपर्क करेंगे।",
     formError: "Enquiry नहीं भेजी जा सकी। कृपया फिर कोशिश करें या दूसरे तरीके से संपर्क करें।",
     formRequiredContact: "कृपया ईमेल पता या फोन नंबर दर्ज करें।",
+    consentRequired: "कृपया पुष्टि करें कि हम आपकी enquiry का जवाब देने के लिए इन विवरणों का उपयोग कर सकते हैं।",
+    consentLabel: "मैं सहमत हूँ कि Golden Films मेरी enquiry का जवाब देने के लिए ऊपर दिए गए विवरणों का उपयोग कर सकता है।",
     contactDetails: "सुनील के फोन, WhatsApp, ईमेल और Instagram विवरण वेबसाइट लाइव होने से पहले जोड़े जाएँगे।",
     footerLine: "पलों को सँजोना। यादें बनाना।",
     quickLinks: "लिंक",
@@ -160,6 +164,7 @@ export default function App() {
           budgetRange: data.get("budget"),
           message: data.get("message"),
           website: data.get("website"),
+          consent: data.get("consent") === "on",
         }),
       });
       if (!response.ok) throw new Error("Enquiry API request failed");
@@ -343,6 +348,7 @@ export default function App() {
               <label>{t.formDate}<input name="date" type="date" /></label>
               <label>{t.formBudget}<select name="budget" defaultValue=""><option value="">{language === "en" ? "Select range" : "सीमा चुनें"}</option><option value="undecided">{language === "en" ? "To be discussed" : "बातचीत के अनुसार"}</option><option value="small">{language === "en" ? "Budget-friendly" : "कम बजट"}</option><option value="custom">{language === "en" ? "Custom project" : "कस्टम प्रोजेक्ट"}</option></select></label>
               <label className="form-full">{t.formMessage}<textarea name="message" rows={4} placeholder={language === "en" ? "Share the details you already know..." : "जो जानकारी उपलब्ध है, वह लिखें..."} required /></label>
+              <label className="consent-check form-full"><input name="consent" type="checkbox" required /><span>{t.consentLabel}</span></label>
             </div>
             <button className="button button-gold form-submit" type="submit" disabled={formStatus === "sending"}>{formStatus === "sending" ? t.formSending : t.formSubmit}<Send size={16} /></button>
             {formStatus === "success" && <p className="form-notice" role="status">{t.formNotice}</p>}

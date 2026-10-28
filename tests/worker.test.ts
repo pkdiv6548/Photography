@@ -107,3 +107,43 @@ test("invalid project limits return 400 before database access", async () => {
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), { error: "invalid_limit", allowed: "1-48" });
 });
+
+test("enquiry requests without explicit consent are rejected before database access", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Sample Visitor",
+        email: "visitor@example.test",
+        service: "photography",
+        message: "Please contact me about your photography services.",
+        consent: false
+      })
+    }),
+    emptyEnv
+  );
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "validation_failed" });
+});
+
+test("enquiry form service values pass validation and fail closed when D1 is absent", async () => {
+  for (const service of ["photography", "videography", "photo-editing", "video-editing"]) {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/enquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Sample Visitor",
+          email: "visitor@example.test",
+          service,
+          message: "Please contact me about your creative services.",
+          consent: true
+        })
+      }),
+      emptyEnv
+    );
+    assert.equal(response.status, 503, service);
+    assert.deepEqual(await response.json(), { error: "database_not_configured" }, service);
+  }
+});
