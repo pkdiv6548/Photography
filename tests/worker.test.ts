@@ -253,6 +253,59 @@ test("phone-only enquiry is stored with a NULL email when D1 is available", asyn
   assert.equal(storedEnquiryValues[2], null, "email column should receive SQL NULL when omitted");
 });
 
+test("categories endpoint returns bilingual category fields from D1", async () => {
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() {
+          assert.match(query, /category_translations/);
+          return {
+            success: true,
+            results: [{ id: "wedding", slug: "wedding-photography", title_en: "Wedding Photography", title_hi: "शादी की फोटोग्राफी", sort_order: 1, group_name: "photography" }] as T[]
+          };
+        }
+      };
+    }
+  };
+  const response = await worker.fetch(new Request("https://example.test/api/v1/categories?lang=hi"), { DB: db });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    categories: [{ id: "wedding", slug: "wedding-photography", title_en: "Wedding Photography", title_hi: "शादी की फोटोग्राफी", sort_order: 1, group_name: "photography" }],
+    lang: "hi"
+  });
+});
+
+test("projects endpoint binds category slug and limit and returns published-project query results", async () => {
+  let preparedQuery = "";
+  let boundValues: unknown[] = [];
+  const db = {
+    prepare(query: string) {
+      preparedQuery = query;
+      return {
+        bind(...args: unknown[]) { boundValues = args; return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() {
+          return { success: true, results: [{ id: "project-1", slug: "sample-wedding", category_slug: "wedding-photography", cover_object_key: "covers/sample.jpg", status: "published", is_featured: 1, location: null, project_date: null }] as T[] };
+        }
+      };
+    }
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/projects?category=wedding-photography&limit=12"),
+    { DB: db }
+  );
+  assert.equal(response.status, 200);
+  assert.match(preparedQuery, /p\.status = 'published'/);
+  assert.deepEqual(boundValues, ["wedding-photography", 12]);
+  assert.deepEqual(await response.json(), {
+    projects: [{ id: "project-1", slug: "sample-wedding", category_slug: "wedding-photography", cover_object_key: "covers/sample.jpg", status: "published", is_featured: 1, location: null, project_date: null }]
+  });
+});
+
 test("enquiry form service values pass validation and fail closed when D1 is absent", async () => {
   for (const service of ["photography", "videography", "photo-editing", "video-editing"]) {
     const response = await worker.fetch(
