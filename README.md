@@ -4,9 +4,9 @@ A premium cinematic, bilingual (English/Hindi) photography, videography, photo-e
 
 ## Current milestone
 
-The responsive portfolio UI prototype and the first Cloudflare Workers API foundation are now in the main branch. The UI includes sample-labelled demo imagery, 14 portfolio categories, services, a showreel preview, and an English/Hindi switcher. The Worker API has health/readiness checks, category/project read routes, validated enquiry handling, D1 schema migrations and regression tests.
+The responsive portfolio UI prototype and Cloudflare Workers API foundation are in the main branch. The UI includes 14 portfolio categories, services, sample-labelled demo imagery, an English/Hindi switcher, and an enquiry form wired to `POST /api/enquiries`.
 
-The website and API are not deployed. The enquiry form remains a preview at this milestone and does not yet send/save enquiries from the public UI. A live D1 binding, deployment configuration, admin authentication, media uploads, and email notifications remain future work.
+The API validates enquiry input and is designed to store submissions in D1. It is not deployed, and the repository's Wrangler configuration deliberately retains a placeholder database ID. The public form will not work against a live service until a real D1 binding is intentionally configured and the Worker is deployed. No production deployment was performed.
 
 ## Local development
 
@@ -20,6 +20,8 @@ npm test
 npm run build
 npm run preview
 ```
+
+Run the Worker locally only after configuring a test database and the required environment secrets. The Postman collection defaults to `http://127.0.0.1:8787`; its valid-enquiry request writes to the configured database, so use a test database rather than production.
 
 ## Planned architecture
 
@@ -41,8 +43,6 @@ All placeholder/demo media must be clearly labeled as sample content and must no
 ## Current limitations
 
 - Real phone, WhatsApp, email and Instagram details have not been provided.
-- The public enquiry form is not yet connected to the Worker API.
-- The Worker API is not deployed and does not have a production D1 binding.
-- Email notifications are not implemented.
-- Admin login/setup, password recovery, email verification, R2 uploads, and the production admin UI are future milestones.
-- No production deployment or paid Cloudflare resource is enabled by this milestone.
+- The Worker is not deployed and no production D1 binding is configured in the repository.
+- Email notifications, Admin authentication, password recovery, email verification, R2 uploads and the production admin UI are not implemented.
+- No paid Cloudflare resource or production deployment is enabled.

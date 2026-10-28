@@ -37,7 +37,7 @@ const copy = {
     previewOnly: "Preview only",
     contactEyebrow: "LET'S MAKE SOMETHING MEANINGFUL",
     contactTitle: "Tell us about your story.",
-    contactText: "For now, this form is a visual preview. Enquiry submission will be enabled after the free backend and spam protection are configured.",
+    contactText: "Send your project details through the enquiry form. Submissions are stored securely once the live backend is configured.",
     formName: "Your name",
     formEmail: "Email address",
     formPhone: "Phone / WhatsApp",
@@ -46,8 +46,13 @@ const copy = {
     formDate: "Event date (optional)",
     formBudget: "Budget range (optional)",
     formMessage: "Tell us a little about the project",
-    formSubmit: "Preview enquiry",
-    formNotice: "This is a demo form only. Your enquiry has not been sent or saved.",
+    formSubmit: "Send enquiry",
+    formSending: "Sending…",
+    formHeading: "PROJECT ENQUIRY",
+    formConnected: "Secure submission",
+    formNotice: "Your enquiry was received. We will get back to you.",
+    formError: "We could not send your enquiry. Please try again later or contact us another way.",
+    formRequiredContact: "Please enter an email address or phone number.",
     contactDetails: "Sunil's phone, WhatsApp, email and Instagram details will be connected before launch.",
     footerLine: "Capturing moments. Crafting memories.",
     quickLinks: "Explore",
@@ -86,7 +91,7 @@ const copy = {
     previewOnly: "केवल प्रीव्यू",
     contactEyebrow: "आइए कुछ खास बनाएँ",
     contactTitle: "अपनी कहानी के बारे में बताएँ।",
-    contactText: "अभी यह फॉर्म केवल दृश्य प्रीव्यू है। मुफ्त बैकएंड और स्पैम सुरक्षा तैयार होने के बाद enquiries चालू होंगी।",
+    contactText: "अपने प्रोजेक्ट की जानकारी enquiry form के ज़रिए भेजें। लाइव बैकएंड कॉन्फ़िगर होने पर आपकी जानकारी सुरक्षित रूप से सेव होगी।",
     formName: "आपका नाम",
     formEmail: "ईमेल पता",
     formPhone: "फोन / WhatsApp",
@@ -95,8 +100,13 @@ const copy = {
     formDate: "कार्यक्रम की तारीख (वैकल्पिक)",
     formBudget: "बजट सीमा (वैकल्पिक)",
     formMessage: "अपने प्रोजेक्ट के बारे में बताएँ",
-    formSubmit: "Enquiry प्रीव्यू",
-    formNotice: "यह केवल डेमो फॉर्म है। आपकी enquiry न भेजी गई है और न सेव हुई है।",
+    formSubmit: "Enquiry भेजें",
+    formSending: "भेज रहे हैं…",
+    formHeading: "प्रोजेक्ट की पूछताछ",
+    formConnected: "सुरक्षित सबमिशन",
+    formNotice: "आपकी enquiry मिल गई है। हम आपसे संपर्क करेंगे।",
+    formError: "Enquiry नहीं भेजी जा सकी। कृपया फिर कोशिश करें या दूसरे तरीके से संपर्क करें।",
+    formRequiredContact: "कृपया ईमेल पता या फोन नंबर दर्ज करें।",
     contactDetails: "सुनील के फोन, WhatsApp, ईमेल और Instagram विवरण वेबसाइट लाइव होने से पहले जोड़े जाएँगे।",
     footerLine: "पलों को सँजोना। यादें बनाना।",
     quickLinks: "लिंक",
@@ -120,16 +130,44 @@ export default function App() {
   const [language, setLanguage] = useState<Language>("en");
   const [activeFilter, setActiveFilter] = useState<PortfolioGroup | "all">("all");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [formPreview, setFormPreview] = useState(false);
+  const [formStatus, setFormStatus] = useState<"idle" | "sending" | "success" | "error" | "contact-required">("idle");
   const t = copy[language];
   const filteredCategories = useMemo(
     () => activeFilter === "all" ? categories : categories.filter((item) => item.group === activeFilter),
     [activeFilter]
   );
 
-  const handleEnquiryPreview = (event: FormEvent<HTMLFormElement>) => {
+  const handleEnquirySubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setFormPreview(true);
+    if (formStatus === "sending") return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    if (!data.get("email")?.toString().trim() && !data.get("phone")?.toString().trim()) {
+      setFormStatus("contact-required");
+      return;
+    }
+    setFormStatus("sending");
+    try {
+      const response = await fetch("/api/enquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: data.get("name"),
+          email: data.get("email"),
+          phone: data.get("phone"),
+          service: data.get("service"),
+          eventDate: data.get("date"),
+          budgetRange: data.get("budget"),
+          message: data.get("message"),
+          website: data.get("website"),
+        }),
+      });
+      if (!response.ok) throw new Error("Enquiry API request failed");
+      form.reset();
+      setFormStatus("success");
+    } catch {
+      setFormStatus("error");
+    }
   };
 
   const jumpToCategories = (filter: PortfolioGroup | "all" = "all") => {
@@ -294,19 +332,22 @@ export default function App() {
             <div className="contact-info-card"><span className="contact-info-icon"><MessageCircle size={21} /></span><div><strong>{language === "en" ? "Contact details" : "संपर्क विवरण"}</strong><p>{t.contactDetails}</p></div></div>
             <div className="contact-methods"><span><Check size={14} /> WhatsApp</span><span><Check size={14} /> Phone</span><span><Check size={14} /> Email</span><span><Check size={14} /> Instagram</span></div>
           </div>
-          <form className="enquiry-form" onSubmit={handleEnquiryPreview}>
-            <div className="form-heading"><span className="eyebrow">{language === "en" ? "ENQUIRY PREVIEW" : "पूछताछ प्रीव्यू"}</span><span className="form-preview-pill">{language === "en" ? "Not connected yet" : "अभी कनेक्ट नहीं है"}</span></div>
+          <form className="enquiry-form" onSubmit={handleEnquirySubmit}>
+            <div className="form-heading"><span className="eyebrow">{t.formHeading}</span><span className="form-preview-pill">{t.formConnected}</span></div>
+            <label aria-hidden="true" style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}>Leave this field empty<input name="website" type="text" tabIndex={-1} autoComplete="off" /></label>
             <div className="form-grid">
               <label>{t.formName}<input name="name" placeholder={language === "en" ? "Your full name" : "आपका पूरा नाम"} required /></label>
-              <label>{t.formEmail}<input name="email" type="email" placeholder="you@example.com" required /></label>
+              <label>{t.formEmail}<input name="email" type="email" placeholder="you@example.com" /></label>
               <label>{t.formPhone}<input name="phone" type="tel" placeholder="+91 ..." /></label>
               <label>{t.formService}<select name="service" defaultValue="" required><option value="" disabled>{t.formChoose}</option>{services.map((item) => <option key={item.id} value={item.id}>{item.title[language]}</option>)}</select></label>
               <label>{t.formDate}<input name="date" type="date" /></label>
               <label>{t.formBudget}<select name="budget" defaultValue=""><option value="">{language === "en" ? "Select range" : "सीमा चुनें"}</option><option value="undecided">{language === "en" ? "To be discussed" : "बातचीत के अनुसार"}</option><option value="small">{language === "en" ? "Budget-friendly" : "कम बजट"}</option><option value="custom">{language === "en" ? "Custom project" : "कस्टम प्रोजेक्ट"}</option></select></label>
               <label className="form-full">{t.formMessage}<textarea name="message" rows={4} placeholder={language === "en" ? "Share the details you already know..." : "जो जानकारी उपलब्ध है, वह लिखें..."} required /></label>
             </div>
-            <button className="button button-gold form-submit" type="submit">{t.formSubmit}<Send size={16} /></button>
-            {formPreview && <p className="form-notice" role="status">{t.formNotice}</p>}
+            <button className="button button-gold form-submit" type="submit" disabled={formStatus === "sending"}>{formStatus === "sending" ? t.formSending : t.formSubmit}<Send size={16} /></button>
+            {formStatus === "success" && <p className="form-notice" role="status">{t.formNotice}</p>}
+            {formStatus === "contact-required" && <p className="form-notice" role="alert">{t.formRequiredContact}</p>}
+            {formStatus === "error" && <p className="form-notice" role="alert">{t.formError}</p>}
           </form>
         </section>
       </main>
