@@ -14,9 +14,9 @@ This is a scaffold for the Cloudflare Workers API. It is not deployed and is not
 
 ## Enquiry JSON
 
-Required keys: name, service, message and consent=true; provide at least one of email or phone. Optional keys: eventDate in YYYY-MM-DD format and budgetRange. The service key must be one of the UI's canonical values: `photography`, `videography`, `photo-editing`, or `video-editing`.
+Required keys: name (2–80 characters), service, message and consent=true; provide at least one of email or phone. Optional keys: eventDate in YYYY-MM-DD format and budgetRange. The service key must be one of the UI's canonical values: `photography`, `videography`, `photo-editing`, or `video-editing`.
 
-The server rejects non-JSON requests, caps declared request bodies at 16 KiB, validates fields and dates, and stores the enquiry before returning success. It applies a database-backed limit of five valid submissions per client IP per 15-minute window. The client IP is represented in the rate-limit table by a SHA-256 digest; the raw IP is not stored. The current implementation does not use a `RATE_LIMIT_SECRET`; this digest is not a keyed HMAC and should not be described as one.
+The server rejects non-JSON requests, enforces a 16 KiB request-body limit while reading the stream (including requests without Content-Length), validates fields and dates, and stores the enquiry before returning success. It applies a database-backed limit of five valid submissions per client IP per 15-minute window. The client IP is represented in the rate-limit table by a SHA-256 digest; the raw IP is not stored. The current implementation does not use a `RATE_LIMIT_SECRET`; this digest is not a keyed HMAC and should not be described as one.
 
 ## Setup status
 

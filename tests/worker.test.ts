@@ -39,6 +39,25 @@ test("non-JSON enquiry requests are rejected", async () => {
   assert.deepEqual(await response.json(), { error: "content_type_must_be_application_json" });
 });
 
+test("oversized enquiry body is rejected even without a declared content length", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Sample visitor",
+        email: "visitor@example.test",
+        service: "photography",
+        message: "x".repeat(17_000),
+        consent: true
+      })
+    }),
+    emptyEnv
+  );
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "request_too_large" });
+});
+
 test("invalid enquiry fields are rejected before database access", async () => {
   const response = await worker.fetch(
     new Request("https://example.test/api/v1/enquiries", {
