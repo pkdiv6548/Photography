@@ -390,3 +390,40 @@ test("enquiry form service values pass validation and fail closed when D1 is abs
     assert.deepEqual(await response.json(), { error: "database_not_configured" }, service);
   }
 });
+
+test("security headers are applied to API errors and OPTIONS responses", async () => {
+  const errorResponse = await worker.fetch(
+    new Request("https://example.test/api/missing"),
+    emptyEnv
+  );
+  assert.equal(errorResponse.status, 404);
+  assert.equal(errorResponse.headers.get("X-Frame-Options"), "DENY");
+  assert.equal(errorResponse.headers.get("Referrer-Policy"), "strict-origin-when-cross-origin");
+  assert.equal(errorResponse.headers.get("Permissions-Policy"), "camera=(), microphone=(), geolocation=()");
+  assert.equal(errorResponse.headers.get("Strict-Transport-Security"), "max-age=31536000");
+
+  const optionsResponse = await worker.fetch(
+    new Request("https://example.test/api/enquiries", { method: "OPTIONS" }),
+    emptyEnv
+  );
+  assert.equal(optionsResponse.status, 204);
+  assert.equal(optionsResponse.headers.get("X-Content-Type-Options"), "nosniff");
+  assert.equal(optionsResponse.headers.get("X-Frame-Options"), "DENY");
+});
+
+test("static asset responses also receive security headers", async () => {
+  const assets = {
+    async fetch(_request: Request) {
+      return new Response("sample asset", {
+        status: 200,
+        headers: { "content-type": "text/plain" }
+      });
+    }
+  };
+  const response = await worker.fetch(new Request("https://example.test/sample.txt"), { ASSETS: assets });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff");
+  assert.equal(response.headers.get("X-Frame-Options"), "DENY");
+  assert.equal(response.headers.get("Referrer-Policy"), "strict-origin-when-cross-origin");
+  assert.equal(response.headers.get("Permissions-Policy"), "camera=(), microphone=(), geolocation=()");
+});
