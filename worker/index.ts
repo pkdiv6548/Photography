@@ -74,7 +74,13 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   if (url.pathname === "/api/categories" && request.method === "GET") {
     try {
       const result = await env.DB.prepare(
-        "SELECT id, slug, title_en, title_hi, group_name, sort_order FROM categories WHERE is_published = 1 ORDER BY sort_order, title_en"
+        `SELECT id, slug, title_en, title_hi, sort_order,
+          CASE
+            WHEN slug IN ('wedding-photography', 'pre-wedding-photography', 'portrait-personal-photography', 'fashion-model-photography', 'event-photography', 'product-photography', 'commercial-photography') THEN 'photography'
+            WHEN slug IN ('cinematic-wedding-films', 'event-videography', 'promotional-commercial-videos', 'reels-short-form-videos', 'other-projects') THEN 'videography'
+            ELSE 'editing'
+          END AS group_name
+         FROM categories ORDER BY sort_order, title_en`
       ).all();
       return json({ categories: result.results ?? [] });
     } catch {
@@ -138,12 +144,12 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const id = crypto.randomUUID();
     try {
       await env.DB.prepare(
-        "INSERT INTO enquiries (id, name, email, phone, service, event_date, budget_range, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO enquiries (id, name, email, phone, service, preferred_date, budget_range, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       ).bind(
         id,
         input.name,
-        input.email || null,
-        input.phone || null,
+        input.email,
+        input.phone,
         input.service,
         input.eventDate || null,
         input.budgetRange || null,
