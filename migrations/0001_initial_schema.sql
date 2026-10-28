@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS media (
 CREATE TABLE IF NOT EXISTS enquiries (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK (length(name) BETWEEN 2 AND 80),
-  email TEXT NOT NULL CHECK (length(email) <= 254),
+  email TEXT CHECK (email IS NULL OR length(email) <= 254),
   phone TEXT,
   service TEXT NOT NULL,
   event_date TEXT,
