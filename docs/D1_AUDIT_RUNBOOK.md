@@ -37,3 +37,24 @@ Before proposing a forward migration:
 ## Deployment gate
 
 The Worker is not considered production-ready merely because `/api/ready` responds. Do not deploy until the live schema is compatible, the frontend/API integration is tested, and security requirements are reviewed. Keep the project within the ₹0 budget; do not enable paid services or billing without explicit approval.
+
+## Supported D1 SQL export: operational preflight
+
+Cloudflare provides a D1 SQL export endpoint at `POST /accounts/{account_id}/d1/database/{database_id}/export`. **Do not trigger it casually against production.** Cloudflare documents that a larger export can make the database unavailable to serve queries while the export runs; the export must be polled until it completes or it can cancel automatically.
+
+Before initiating a live export:
+
+1. Schedule an approved maintenance window and confirm the database name and UUID with a fresh metadata GET.
+2. Confirm the expected impact and timing with the application owner; ensure no deployment or migration is running.
+3. Use the Cloudflare-supported export flow with `output_format: "polling"`. Poll using the returned bookmark until the status is complete; preserve the completion result and filename.
+4. Download the returned signed URL promptly (it is time-limited) to a secure location outside Git. Do not paste signed URLs, credentials, or exported customer data into issues, PRs, logs, or chat.
+5. Verify the downloaded SQL is non-empty, record a cryptographic checksum and file size, and inspect the SQL header/content without executing it against production.
+6. Restore the export into a newly created **disposable** D1 database or an isolated SQLite fixture. Confirm the restore/import completed, expected table definitions are present, and row counts plus foreign-key checks match the source snapshot.
+7. Retain the backup and restore evidence securely according to the project's data-retention policy.
+
+An export completion alone is not a verified backup: a successful isolated restore and integrity comparison are required. Do not run the import endpoint against the live database as a restore test. The Cloudflare import flow writes to its target database and can block it while running.
+
+### Current status
+
+As of this runbook update, the export endpoint has been confirmed in the Cloudflare API specification, but **no export has been started and no backup file has been produced or verified**. This is intentional: initiating a production export may temporarily interrupt D1 query availability and requires an approved maintenance window. The live database has not been changed.
+
