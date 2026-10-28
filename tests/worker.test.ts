@@ -441,3 +441,25 @@ test("enquiry endpoint rejects content types that only contain application/json 
   assert.equal(response.status, 415);
   assert.deepEqual(await response.json(), { error: "content_type_must_be_application_json" });
 });
+
+
+test("enquiry endpoint accepts case-insensitive application/json with charset parameters", async () => {
+  for (const contentType of ["application/json; charset=utf-8", "Application/JSON", " application/json ; charset=UTF-8 "]) {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/v1/enquiries", {
+        method: "POST",
+        headers: { "Content-Type": contentType },
+        body: JSON.stringify({
+          name: "Sample Visitor",
+          email: "visitor@example.test",
+          service: "photography",
+          message: "Please contact me about photography services.",
+          consent: true
+        })
+      }),
+      emptyEnv
+    );
+    assert.equal(response.status, 503, contentType);
+    assert.deepEqual(await response.json(), { error: "database_not_configured" }, contentType);
+  }
+});
