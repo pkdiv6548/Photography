@@ -167,7 +167,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   if ((url.pathname === "/api/projects" || url.pathname === "/api/v1/projects") && request.method === "GET") {
     const rawLimit = url.searchParams.get("limit") ?? "24";
     const limit = Number(rawLimit);
-    if (!/^\\d+$/.test(rawLimit) || !Number.isInteger(limit) || limit < 1 || limit > 48) {
+    if (!/^\d+$/.test(rawLimit) || !Number.isInteger(limit) || limit < 1 || limit > 48) {
       return json({ error: "invalid_limit", allowed: "1-48" }, 400);
     }
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
@@ -220,7 +220,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       "product-commercial", "cinematic-video", "photo-editing", "video-editing", "other"
     ]);
     const consent = body.consent === true;
-    const validPhone = !input.phone || /^[+()\\d .-]{7,30}$/.test(input.phone);
+    const validPhone = !input.phone || /^[+()\d .-]{7,30}$/.test(input.phone);
     const valid =
       input.name.length >= 2 &&
       Boolean(input.email || input.phone) &&
