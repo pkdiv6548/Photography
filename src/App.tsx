@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import {
-  Aperture, ArrowDownRight, ArrowRight, Camera, Check, ChevronDown, Clapperboard,
+  Aperture, ArrowDownRight, ArrowRight, Camera, Check, Clapperboard,
   Film, Image as ImageIcon, Languages, Menu, MessageCircle, Play, Send, Sparkles,
   WandSparkles, X
 } from "lucide-react";
