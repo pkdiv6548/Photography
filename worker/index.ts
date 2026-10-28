@@ -59,6 +59,50 @@ function isValidDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+const RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
+const RATE_LIMIT_MAX_REQUESTS = 5;
+
+async function enforceEnquiryRateLimit(request: Request, env: Env): Promise<Response | null> {
+  const clientIp = request.headers.get("cf-connecting-ip") ?? "unknown";
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(clientIp));
+  const ipHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const windowStart = Math.floor(nowSeconds / RATE_LIMIT_WINDOW_SECONDS) * RATE_LIMIT_WINDOW_SECONDS;
+  const retryAfter = windowStart + RATE_LIMIT_WINDOW_SECONDS - nowSeconds;
+
+  try {
+    const row = await env.DB.prepare(
+      `INSERT INTO enquiry_rate_limits (ip_hash, window_start, request_count)
+       VALUES (?, ?, 1)
+       ON CONFLICT(ip_hash, window_start)
+       DO UPDATE SET request_count = request_count + 1
+       RETURNING request_count`
+    ).bind(ipHash, windowStart).first<{ request_count: number }>();
+
+    // Best-effort cleanup prevents old IP digests from accumulating indefinitely.
+    if (nowSeconds % 97 === 0) {
+      await env.DB.prepare("DELETE FROM enquiry_rate_limits WHERE window_start < ?")
+        .bind(nowSeconds - 48 * 60 * 60).run();
+    }
+
+    if (!row || row.request_count > RATE_LIMIT_MAX_REQUESTS) {
+      return new Response(JSON.stringify({ error: "Too many enquiry attempts. Please wait and try again." }), {
+        status: 429,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff",
+          "retry-after": String(retryAfter),
+        },
+      });
+    }
+    return null;
+  } catch {
+    // Fail closed if the limiter cannot be checked; never silently disable abuse protection.
+    return json({ error: "Enquiry service is temporarily unavailable. Please try again later." }, 503);
+  }
+}
+
 async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
@@ -104,6 +148,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!contentType.toLowerCase().includes("application/json")) {
       return json({ error: "Content-Type must be application/json." }, 415);
     }
+
+    const rateLimitResponse = await enforceEnquiryRateLimit(request, env);
+    if (rateLimitResponse) return rateLimitResponse;
 
     const declaredLength = Number(request.headers.get("content-length") ?? "0");
     if (declaredLength > 12_000) return json({ error: "Request is too large." }, 413);
@@ -165,14 +212,32 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   return new Response("Not found.", { status: 404 });
 }
 
+function applySecurityHeaders(response: Response, request: Request): Response {
+  const headers = new Headers(response.headers);
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("x-frame-options", "DENY");
+  headers.set("referrer-policy", "strict-origin-when-cross-origin");
+  headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
+  if (new URL(request.url).protocol === "https:") {
+    headers.set("strict-transport-security", "max-age=31536000");
+  }
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/")) return handleApi(request, env);
-    if (env.ASSETS) return env.ASSETS.fetch(request);
-    return new Response("Golden Films API is running. Static assets are not configured yet.", {
-      status: 503,
-      headers: { "content-type": "text/plain; charset=utf-8" },
-    });
+    let response: Response;
+    if (url.pathname.startsWith("/api/")) {
+      response = await handleApi(request, env);
+    } else if (env.ASSETS) {
+      response = await env.ASSETS.fetch(request);
+    } else {
+      response = new Response("Golden Films API is running. Static assets are not configured yet.", {
+        status: 503,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
+    }
+    return applySecurityHeaders(response, request);
   },
 };

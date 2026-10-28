@@ -40,3 +40,29 @@ The connected Cloudflare account's `golden-films-db` already contained the Golde
 - Enquiry inserts now use `preferred_date`, and empty strings for email/phone when the alternate contact method is supplied, matching the existing D1 constraints.
 - Direct read-only verification confirmed 14 categories and 0 existing enquiries; no test enquiry was inserted into the database.
 - No Worker deployment was performed. Live endpoint checks still require a deployed Worker.
+
+
+## Enquiry rate limiting (2026-10-28)
+
+- Added `enquiry_rate_limits` D1 table and index in `migrations/0002_enquiry_rate_limits.sql`.
+- Worker computes a SHA-256 digest of Cloudflare's `CF-Connecting-IP`; raw IP addresses are not stored.
+- Limit: 5 enquiry API attempts per client IP per fixed 15-minute window.
+- Returns HTTP 429 with `Retry-After` when the limit is exceeded.
+- Rate-limit storage failure returns 503 (fail-closed) rather than silently bypassing the protection.
+- Old rate-limit rows are opportunistically cleaned up after 48 hours.
+- The new migration was applied successfully to the connected `golden-films-db` database.
+- Postman collection now includes checks for non-JSON content type and cross-origin submission.
+- These changes are not live until the Worker is deployed. Do not run the valid-enquiry test against production because it creates a real enquiry row.
+
+
+## Deployment preflight review (2026-10-28)
+
+- Read-only schema review confirms existing `admin_users`, `admin_sessions`, `admin_setup`, `auth_rate_limits`, and `audit_logs` tables. Table presence alone does not mean admin login/setup routes are implemented or usable.
+- R2 bucket listing returned Cloudflare error 10042: R2 must first be enabled in the Cloudflare Dashboard. No bucket was created and no paid action was taken.
+- Do not deploy the current Worker as production-ready yet: initial admin setup/login endpoints are not implemented in the currently verified Worker, R2 is not enabled, and live Postman smoke tests have not run.
+- Before admin authentication is implemented, configure a high-entropy `ADMIN_SETUP_TOKEN` only as a Cloudflare Worker secret (never in Git or a plain-text variable), then use a one-time setup route that refuses setup after the first active admin exists.
+- Before production release, add and verify session expiry/revocation, login throttling, origin checks for state-changing requests, security headers, and a test-only D1 environment. Do not use production for the valid-enquiry regression test.
+
+
+- Added baseline response headers in the Worker for API and static-asset responses: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, a restrictive `Permissions-Policy`, and HSTS on HTTPS responses.
+- A Content Security Policy is intentionally deferred until the frontend's external image/font origins are fully inventoried, so it can be introduced without accidentally breaking the site.
