@@ -1,0 +1,109 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import worker from "../worker/index.ts";
+
+const emptyEnv = {};
+
+test("health endpoint responds and includes security headers", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/health"), emptyEnv);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff");
+  assert.deepEqual(await response.json(), { status: "ok", service: "golden-films-api" });
+});
+
+test("readiness endpoint fails closed when D1 is not configured", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/ready"), emptyEnv);
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "database_not_configured" });
+});
+
+test("requests from an unexpected origin are rejected", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/health", { headers: { Origin: "https://attacker.example" } }),
+    emptyEnv
+  );
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: "origin_not_allowed" });
+});
+
+test("non-JSON enquiry requests are rejected", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: "name=visitor"
+    }),
+    emptyEnv
+  );
+  assert.equal(response.status, 415);
+  assert.deepEqual(await response.json(), { error: "content_type_must_be_application_json" });
+});
+
+test("invalid enquiry fields are rejected before database access", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "A",
+        email: "not-an-email",
+        service: "untrusted-value",
+        message: "Too short",
+        consent: false
+      })
+    }),
+    emptyEnv
+  );
+  assert.equal(response.status, 400);
+  assert.equal((await response.json() as { error: string }).error, "validation_failed");
+});
+
+test("unknown routes return a stable 404 JSON response", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/not-found"), emptyEnv);
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: "not_found" });
+});
+
+test("unsupported methods return 405", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/health", { method: "DELETE" }), emptyEnv);
+  assert.equal(response.status, 405);
+  assert.equal(response.headers.get("Allow"), "GET, POST, OPTIONS");
+});
+
+test("impossible calendar dates are rejected", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Sample visitor",
+        email: "visitor@example.test",
+        service: "wedding-photography",
+        eventDate: "2026-99-99",
+        message: "Please tell me about your photography services.",
+        consent: true
+      })
+    }),
+    emptyEnv
+  );
+  assert.equal(response.status, 400);
+  assert.equal((await response.json() as { error: string }).error, "validation_failed");
+});
+
+test("unsupported category language returns 400 before database access", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/categories?lang=fr"),
+    emptyEnv
+  );
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "invalid_language", supported: ["en", "hi"] });
+});
+
+test("invalid project limits return 400 before database access", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/projects?limit=0"),
+    emptyEnv
+  );
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "invalid_limit", allowed: "1-48" });
+});

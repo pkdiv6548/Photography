@@ -1,0 +1,17 @@
+name = "golden-films-api"
+main = "worker/index.ts"
+compatibility_date = "2026-10-28"
+workers_dev = true
+
+# Template only. Replace the sample D1 ID after deciding to create a database.
+# Do not deploy this file with the sample ID.
+[[d1_databases]]
+binding = "DB"
+database_name = "golden-films-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# Set ALLOWED_ORIGIN to the exact public website origin at deployment time.
+# RATE_LIMIT_SECRET must be configured using Wrangler secrets, never in this file.
+[vars]
+ALLOWED_ORIGIN = "http://localhost:5173"

@@ -1,0 +1,29 @@
+name: Golden Films checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Typecheck frontend and Worker API
+        run: npm run typecheck
+      - name: Run Worker API regression tests
+        run: npm test
+      - name: Build frontend
+        run: npm run build
