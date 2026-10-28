@@ -20,7 +20,7 @@ interface StaticAssetsBinding {
 }
 
 interface Env {
-  DB: D1Binding;
+  DB?: D1Binding;
   ASSETS?: StaticAssetsBinding;
 }
 
@@ -63,6 +63,7 @@ const RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
 const RATE_LIMIT_MAX_REQUESTS = 5;
 
 async function enforceEnquiryRateLimit(request: Request, env: Env): Promise<Response | null> {
+  if (!env.DB) return json({ error: "database_not_configured" }, 503);
   const clientIp = request.headers.get("cf-connecting-ip") ?? "unknown";
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(clientIp));
   const ipHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -105,17 +106,48 @@ async function enforceEnquiryRateLimit(request: Request, env: Env): Promise<Resp
 
 async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  const origin = request.headers.get("origin");
 
-  if (url.pathname === "/api/health" && request.method === "GET") {
+  if (origin) {
     try {
-      await env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>();
-      return json({ ok: true, service: "golden-films-api", database: "connected" });
+      if (new URL(origin).origin !== url.origin) {
+        return json({ error: "origin_not_allowed" }, 403);
+      }
     } catch {
-      return json({ ok: false, service: "golden-films-api", database: "unavailable" }, 503);
+      return json({ error: "origin_not_allowed" }, 403);
     }
   }
 
-  if (url.pathname === "/api/categories" && request.method === "GET") {
+  if (url.pathname.startsWith("/api/") && !["GET", "POST", "OPTIONS"].includes(request.method)) {
+    const response = json({ error: "method_not_allowed" }, 405);
+    response.headers.set("Allow", "GET, POST, OPTIONS");
+    return response;
+  }
+
+  if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
+    return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
+  }
+
+  if (url.pathname === "/api/health" && request.method === "GET") {
+    return json({ status: "ok", service: "golden-films-api" });
+  }
+
+  if (url.pathname === "/api/ready" && request.method === "GET") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    try {
+      await env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>();
+      return json({ status: "ready" });
+    } catch {
+      return json({ error: "database_unavailable" }, 503);
+    }
+  }
+
+  if ((url.pathname === "/api/categories" || url.pathname === "/api/v1/categories") && request.method === "GET") {
+    const lang = url.searchParams.get("lang") ?? "en";
+    if (lang !== "en" && lang !== "hi") {
+      return json({ error: "invalid_language", supported: ["en", "hi"] }, 400);
+    }
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
     try {
       const result = await env.DB.prepare(
         `SELECT id, slug, title_en, title_hi, sort_order,
@@ -126,48 +158,52 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
           END AS group_name
          FROM categories ORDER BY sort_order, title_en`
       ).all();
-      return json({ categories: result.results ?? [] });
+      return json({ categories: result.results ?? [], lang });
     } catch {
-      return json({ error: "Categories are temporarily unavailable." }, 503);
+      return json({ error: "categories_unavailable" }, 503);
     }
   }
 
-  if (url.pathname === "/api/enquiries" && request.method === "POST") {
-    const origin = request.headers.get("origin");
-    if (origin) {
-      try {
-        if (new URL(origin).origin !== url.origin) {
-          return json({ error: "Request origin is not allowed." }, 403);
-        }
-      } catch {
-        return json({ error: "Invalid request origin." }, 403);
-      }
+  if ((url.pathname === "/api/projects" || url.pathname === "/api/v1/projects") && request.method === "GET") {
+    const rawLimit = url.searchParams.get("limit") ?? "24";
+    const limit = Number(rawLimit);
+    if (!/^\\d+$/.test(rawLimit) || !Number.isInteger(limit) || limit < 1 || limit > 48) {
+      return json({ error: "invalid_limit", allowed: "1-48" }, 400);
     }
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const category = url.searchParams.get("category");
+    try {
+      const query = category
+        ? env.DB.prepare("SELECT id, slug, category_slug, cover_image_url, status, is_featured, location, project_date, demo_label FROM projects WHERE status = 'published' AND category_slug = ? ORDER BY is_featured DESC, updated_at DESC LIMIT ?").bind(category, limit)
+        : env.DB.prepare("SELECT id, slug, category_slug, cover_image_url, status, is_featured, location, project_date, demo_label FROM projects WHERE status = 'published' ORDER BY is_featured DESC, updated_at DESC LIMIT ?").bind(limit);
+      const result = await query.all();
+      return json({ projects: result.results ?? [] });
+    } catch {
+      return json({ error: "projects_unavailable" }, 503);
+    }
+  }
 
+  if ((url.pathname === "/api/enquiries" || url.pathname === "/api/v1/enquiries") && request.method === "POST") {
     const contentType = request.headers.get("content-type") ?? "";
     if (!contentType.toLowerCase().includes("application/json")) {
-      return json({ error: "Content-Type must be application/json." }, 415);
+      return json({ error: "content_type_must_be_application_json" }, 415);
     }
 
-    const rateLimitResponse = await enforceEnquiryRateLimit(request, env);
-    if (rateLimitResponse) return rateLimitResponse;
-
     const declaredLength = Number(request.headers.get("content-length") ?? "0");
-    if (declaredLength > 12_000) return json({ error: "Request is too large." }, 413);
+    if (declaredLength > 16_384) return json({ error: "request_too_large" }, 413);
 
     let raw: unknown;
     try {
       raw = await request.json();
     } catch {
-      return json({ error: "Invalid JSON body." }, 400);
+      return json({ error: "invalid_json" }, 400);
     }
 
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-      return json({ error: "Invalid enquiry data." }, 400);
+      return json({ error: "validation_failed" }, 400);
     }
 
     const body = raw as Record<string, unknown>;
-    // Honeypot: silently accept automated submissions without storing them.
     if (cleanText(body.website, 200)) return json({ ok: true, message: "Enquiry received." }, 201);
 
     const input: EnquiryInput = {
@@ -179,14 +215,26 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       budgetRange: cleanText(body.budgetRange, 60),
       message: cleanText(body.message, 3000),
     };
+    const allowedServices = new Set([
+      "wedding-photography", "pre-wedding", "portrait-fashion", "event-coverage",
+      "product-commercial", "cinematic-video", "photo-editing", "video-editing", "other"
+    ]);
+    const consent = body.consent === true;
+    const validPhone = !input.phone || /^[+()\\d .-]{7,30}$/.test(input.phone);
+    const valid =
+      input.name.length >= 2 &&
+      Boolean(input.email || input.phone) &&
+      (!input.email || isValidEmail(input.email)) &&
+      validPhone &&
+      allowedServices.has(input.service) &&
+      input.message.length >= 10 &&
+      isValidDate(input.eventDate ?? "") &&
+      consent;
+    if (!valid) return json({ error: "validation_failed" }, 400);
 
-    if (input.name.length < 2) return json({ error: "Please enter your name." }, 400);
-    if (!input.email && !input.phone) return json({ error: "Please provide an email address or phone number." }, 400);
-    if (input.email && !isValidEmail(input.email)) return json({ error: "Please enter a valid email address." }, 400);
-    if (input.phone && !/^[+()\d .-]{7,30}$/.test(input.phone)) return json({ error: "Please enter a valid phone number." }, 400);
-    if (!input.service) return json({ error: "Please select a service." }, 400);
-    if (!input.message || input.message.length < 10) return json({ error: "Please add a little more detail to your message." }, 400);
-    if (!isValidDate(input.eventDate ?? "")) return json({ error: "Please enter a valid event date." }, 400);
+    const rateLimitResponse = await enforceEnquiryRateLimit(request, env);
+    if (rateLimitResponse) return rateLimitResponse;
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
 
     const id = crypto.randomUUID();
     try {
@@ -204,11 +252,11 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       ).run();
       return json({ ok: true, id, message: "Enquiry received. We will get back to you." }, 201);
     } catch {
-      return json({ error: "We could not save your enquiry. Please try again later." }, 503);
+      return json({ error: "enquiry_storage_unavailable" }, 503);
     }
   }
 
-  if (url.pathname.startsWith("/api/")) return json({ error: "Not found." }, 404);
+  if (url.pathname.startsWith("/api/")) return json({ error: "not_found" }, 404);
   return new Response("Not found.", { status: 404 });
 }
 
