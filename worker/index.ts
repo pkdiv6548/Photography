@@ -109,6 +109,12 @@ function stringField(value: unknown, maxLength: number): string | null {
   return normalized;
 }
 
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(value + "T00:00:00.000Z");
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 function validateEnquiry(value: unknown):
   | { ok: true; data: {
       name: string;
@@ -130,12 +136,10 @@ function validateEnquiry(value: unknown):
   const phoneRaw = body.phone === undefined || body.phone === null ? "" : stringField(body.phone, 24);
   const service = stringField(body.service, 40);
   const message = stringField(body.message, 3000);
-  const eventDateRaw = body.eventDate === undefined || body.eventDate === null || body.eventDate === ""
-    ? null
-    : stringField(body.eventDate, 10);
-  const budgetRaw = body.budgetRange === undefined || body.budgetRange === null || body.budgetRange === ""
-    ? null
-    : stringField(body.budgetRange, 80);
+  const eventDateProvided = body.eventDate !== undefined && body.eventDate !== null && body.eventDate !== "";
+  const eventDateRaw = eventDateProvided ? stringField(body.eventDate, 10) : null;
+  const budgetProvided = body.budgetRange !== undefined && body.budgetRange !== null && body.budgetRange !== "";
+  const budgetRaw = budgetProvided ? stringField(body.budgetRange, 80) : null;
 
   if (!name || name.length < 2) return { ok: false, message: "Enter a name between 2 and 80 characters." };
   if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -149,10 +153,10 @@ function validateEnquiry(value: unknown):
   }
   if (!message || message.length < 10) return { ok: false, message: "The message must be at least 10 characters." };
   if (body.consent !== true) return { ok: false, message: "Consent is required to submit this enquiry." };
-  if (eventDateRaw !== null && (!eventDateRaw || !/^\d{4}-\d{2}-\d{2}$/.test(eventDateRaw))) {
-    return { ok: false, message: "Use YYYY-MM-DD for the event date." };
+  if (eventDateProvided && (!eventDateRaw || !isValidIsoDate(eventDateRaw))) {
+    return { ok: false, message: "Use a real calendar date in YYYY-MM-DD format." };
   }
-  if (budgetRaw === null && body.budgetRange !== undefined && body.budgetRange !== null && body.budgetRange !== "") {
+  if (budgetProvided && !budgetRaw) {
     return { ok: false, message: "The budget range is invalid." };
   }
 
