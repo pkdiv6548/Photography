@@ -21,12 +21,17 @@ test("readiness endpoint reports ready only when the expected schema is availabl
   let checkedSchema = "";
   const db = {
     prepare(query: string) {
-      checkedSchema = query;
+      checkedSchema += query;
       return {
         bind(..._args: unknown[]) { return this; },
         async first<T>() { return null as T | null; },
         async run() { return { success: true, meta: { changes: 0 } }; },
-        async all<T>() { return { success: true, results: [] as T[] }; }
+        async all<T>() {
+          if (query.includes("PRAGMA table_info(enquiries)")) {
+            return { success: true, results: [{ name: "email", notnull: 0 }] as T[] };
+          }
+          return { success: true, results: [] as T[] };
+        }
       };
     }
   };
@@ -47,6 +52,27 @@ test("readiness endpoint rejects a connected database with the legacy schema", a
         async first<T>() { return null as T | null; },
         async run() { return { success: true, meta: { changes: 0 } }; },
         async all<T>() { throw new Error("no such table: category_translations"); }
+      };
+    }
+  };
+  const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "database_schema_incompatible" });
+});
+
+test("readiness rejects a schema where enquiries.email is NOT NULL", async () => {
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() {
+          if (query.includes("PRAGMA table_info(enquiries)")) {
+            return { success: true, results: [{ name: "email", notnull: 1 }] as T[] };
+          }
+          return { success: true, results: [] as T[] };
+        }
       };
     }
   };
