@@ -24,7 +24,7 @@ Counts captured at the same time:
 - `admin_sessions`: 0 rows
 - `audit_logs`: 0 rows
 
-These are point-in-time observations, not guarantees about the next migration window. Recheck counts immediately before any future write. Cloudflare metadata `num_tables: 0` still conflicts with the successful SQLite catalog query; resolve that discrepancy before migration approval.
+These are point-in-time observations, not guarantees about the next migration window. Recheck counts immediately before any future write. A direct Cloudflare D1 database-details GET on 2026-10-28 returned `num_tables: 12`, matching the 12 application tables returned by `sqlite_master` when the internal `_cf_KV` table is excluded. An earlier metadata observation reported zero and was inconsistent; the direct metadata response and catalog now agree. Preserve this discrepancy in the audit trail and recheck both sources during preflight. This resolves the current table-count mismatch, but does not replace a verified export/restore.
 
 ## Mapping and blockers
 
@@ -91,3 +91,19 @@ Required disposable-test assertions:
 - Exactly 28 category translation rows are produced, with one `en` and one `hi` row per category.
 - Each translation's `category_id` equals the actual category primary key, not the slug unless those values happen to match.
 - The migration fails loudly on missing or duplicate mappings instead of silently skipping rows.
+
+
+## Follow-up read-only integrity inventory (2026-10-28)
+
+PR #32 adds `scripts/audit-d1-integrity.sql`, a statement-by-statement diagnostic inventory for table definitions, category ID/slug invariants, point-in-time row counts, column definitions, foreign-key declarations, indexes, and `PRAGMA foreign_key_check`. It contains no DDL or DML. Run each statement separately because the D1 query endpoint may reject large compound statements.
+
+The current direct database-details response confirmed:
+- Database name: `golden-films-db`
+- UUID: `0241231b-6e6c-410b-a5ac-958eeb424a78`
+- `num_tables: 12`
+- `file_size: 163840` bytes
+- `read_replication.mode: disabled`
+
+The current catalog query listed 12 application tables plus Cloudflare's internal `_cf_KV` table and indexes. Read-only queries again reported `rows_written: 0` and `changed_db: false`. The previously captured zero-row counts for projects, enquiries, media, translations, and admin/auth tables remain point-in-time only and must be refreshed before any migration.
+
+This inventory does not constitute a backup, restore test, migration test, or authorization to write to the live database.
