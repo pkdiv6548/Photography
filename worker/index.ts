@@ -293,6 +293,8 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       consent;
     if (!valid) return json({ error: "validation_failed" }, 400);
 
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+
     // Fail closed before the rate limiter performs any writes: the configured live D1
     // database has a legacy schema, and this Worker must not partially operate against it.
     try {
