@@ -167,10 +167,22 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   if (url.pathname === "/api/ready" && request.method === "GET") {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     try {
-      await env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>();
+      // Validate the columns and tables used by live API queries, not just DB connectivity.
+      // LIMIT 0 keeps this a schema-only check without reading application rows.
+      await env.DB.prepare(
+        `SELECT c.is_published, ct.category_id, ct.language, ct.name,
+          p.category_id, p.cover_object_key, p.featured, p.event_date, p.updated_at,
+          e.email, e.event_date, e.consent, rl.ip_hash, rl.window_start, rl.request_count
+         FROM categories c
+         LEFT JOIN category_translations ct ON ct.category_id = c.id
+         LEFT JOIN projects p ON p.category_id = c.id
+         LEFT JOIN enquiries e ON 1 = 0
+         LEFT JOIN enquiry_rate_limits rl ON 1 = 0
+         LIMIT 0`
+      ).all();
       return json({ status: "ready" });
     } catch {
-      return json({ error: "database_unavailable" }, 503);
+      return json({ error: "database_schema_incompatible" }, 503);
     }
   }
 
