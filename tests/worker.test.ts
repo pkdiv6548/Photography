@@ -146,6 +146,49 @@ test("enquiry requests without explicit consent are rejected before database acc
   assert.deepEqual(await response.json(), { error: "validation_failed" });
 });
 
+test("enquiry rate limit returns 429 and does not store the sixth request", async () => {
+  let enquiryInsertAttempted = false;
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) {
+          return this;
+        },
+        async first<T>() {
+          if (query.includes("INSERT INTO enquiry_rate_limits")) {
+            return { request_count: 6 } as T;
+          }
+          return null;
+        },
+        async run() {
+          if (query.includes("INSERT INTO enquiries")) enquiryInsertAttempted = true;
+          return { success: true, meta: { changes: 1 } };
+        },
+        async all<T>() {
+          return { success: true, results: [] as T[] };
+        }
+      };
+    }
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "cf-connecting-ip": "203.0.113.11" },
+      body: JSON.stringify({
+        name: "Sample Visitor",
+        email: "visitor@example.test",
+        service: "photography",
+        message: "Please contact me about photography services.",
+        consent: true
+      })
+    }),
+    { DB: db }
+  );
+  assert.equal(response.status, 429);
+  assert.ok(Number(response.headers.get("retry-after")) > 0);
+  assert.equal(enquiryInsertAttempted, false);
+});
+
 test("phone-only enquiry is stored with a NULL email when D1 is available", async () => {
   let storedEnquiryValues: unknown[] | undefined;
   const db = {
