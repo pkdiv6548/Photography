@@ -180,6 +180,14 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
          LEFT JOIN enquiry_rate_limits rl ON 1 = 0
          LIMIT 0`
       ).all();
+
+      // Column existence alone is insufficient: phone-only submissions bind SQL NULL
+      // for email, so a NOT NULL email constraint makes the API incompatible.
+      const enquiryColumns = await env.DB.prepare("PRAGMA table_info(enquiries)").all<{ name: string; notnull: number }>();
+      const emailColumn = (enquiryColumns.results ?? []).find((column) => column.name === "email");
+      if (!emailColumn || emailColumn.notnull !== 0) {
+        throw new Error("enquiries.email must permit NULL");
+      }
       return json({ status: "ready" });
     } catch {
       return json({ error: "database_schema_incompatible" }, 503);
