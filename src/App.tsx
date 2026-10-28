@@ -1,255 +1,322 @@
-import { useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import {
-  ArrowDownRight, ArrowRight, Camera, Clapperboard, Menu, X,
-  Instagram, MessageCircle, Mail, Phone, Sparkles
+  Aperture, ArrowDownRight, ArrowRight, Camera, Check, Clapperboard,
+  Film, Image as ImageIcon, Languages, Menu, MessageCircle, Play, Send, Sparkles,
+  WandSparkles, X
 } from "lucide-react";
-
-type Language = "en" | "hi";
+import { categories, heroImage, projects, type Language, type PortfolioGroup } from "./data";
 
 const copy = {
   en: {
-    navWork: "Selected work", navServices: "Services", navAbout: "About", navContact: "Contact",
-    eyebrow: "PHOTOGRAPHY · FILMS · EDITING",
-    heroTitle: "Stories that feel like",
-    heroAccent: "golden hour.",
-    heroText: "Honest moments, artfully framed. Cinematic photographs and films made to keep your memories close.",
-    explore: "Explore the portfolio", contact: "Let’s create together",
-    note: "A SAMPLE PORTFOLIO — DEMO IMAGERY",
-    selected: "A few stories,",
-    selectedAccent: "beautifully told.",
-    selectedText: "A curated preview of the moments and moods Golden Films loves to capture.",
-    viewAll: "Explore categories",
-    servicesEyebrow: "WHAT WE DO",
-    servicesTitle: "Made to be remembered.",
-    servicesText: "From the first frame to the final grade, every detail has a purpose.",
-    aboutEyebrow: "BEHIND THE LENS",
-    aboutTitle: "One eye for detail. A heart for stories.",
-    aboutText: "Golden Films is the creative portfolio of Sunil — bringing photography, filmmaking and post-production together to tell stories with warmth and intention.",
-    aboutNote: "Sunil’s personal bio and real project details will be added here.",
-    reelEyebrow: "THE FEELING IN MOTION",
-    reelTitle: "Little moments. Lasting films.",
-    reelText: "A cinematic showreel will live here. For now, this section is a preview of the Golden Films experience.",
-    enquire: "Make an enquiry", contactEyebrow: "YOUR STORY, NEXT",
-    contactTitle: "Have something special in mind?",
-    contactText: "Tell us what you’re planning. We’ll take it from there.",
-    formName: "Your name", formEmail: "Email address", formService: "What do you need?",
-    formMessage: "Tell us a little about it", formSend: "Prepare enquiry", formHint: "This demo form does not send or store personal information yet.",
-    footer: "Made with care, framed in light.", demo: "Demo image",
-    categories: ["Weddings", "Pre-wedding", "Portraits", "Fashion", "Events", "Products"],
-    serviceNames: ["Photography", "Cinematic films", "Photo retouching", "Video editing"],
-    serviceDescriptions: ["Portraits, celebrations, products and meaningful everyday moments.", "Wedding films, event stories and promotional video content.", "Careful retouching, color balance and polished final images.", "Editing, color grading and vertical short-form videos."],
-    formServices: ["Wedding photography", "Pre-wedding", "Portrait / fashion", "Event coverage", "Product / commercial", "Cinematic video", "Photo editing", "Video editing", "Other"]
+    nav: ["Home", "Portfolio", "Services", "About", "Showreel", "Contact"],
+    eyebrow: "PHOTOGRAPHY · FILMMAKING · EDITING",
+    heroTitle: "Moments into timeless stories.",
+    heroText: "Photography, cinematic films and thoughtful editing for the moments and brands that matter.",
+    viewPortfolio: "Explore portfolio",
+    contactSunil: "Contact Sunil",
+    demo: "DEMO PORTFOLIO",
+    sampleNotice: "Sample visuals are for layout preview only — they are not Sunil's real client work.",
+    categoriesEyebrow: "EXPLORE OUR WORK",
+    categoriesTitle: "Portfolio categories",
+    categoriesText: "A place for every story, from intimate portraits to cinematic celebrations.",
+    filters: ["All work", "Photography", "Videography", "Editing"],
+    featuredEyebrow: "SELECTED STORIES",
+    featuredTitle: "Featured portfolio",
+    featuredText: "A small preview of how your work will be presented.",
+    servicesEyebrow: "WHAT WE CREATE",
+    servicesTitle: "Creative services",
+    servicesText: "One creative partner for capturing, shaping and finishing your visuals.",
+    learnMore: "Explore category",
+    aboutEyebrow: "THE CREATIVE BEHIND THE LENS",
+    aboutTitle: "A story-led approach.",
+    aboutText: "Golden Films is the creative portfolio of Sunil, bringing photography, filmmaking, photo editing and video editing together. Sunil's personal bio and real project stories will be added after they are provided and approved.",
+    aboutPlaceholder: "Personal bio to be added",
+    showreelEyebrow: "A MOVING PICTURE",
+    showreelTitle: "Showreel preview",
+    showreelText: "These are demo thumbnails. Real film links can be added when approved videos are available.",
+    previewOnly: "Preview only",
+    contactEyebrow: "LET'S MAKE SOMETHING MEANINGFUL",
+    contactTitle: "Tell us about your story.",
+    contactText: "For now, this form is a visual preview. Enquiry submission will be enabled after the free backend and spam protection are configured.",
+    formName: "Your name",
+    formEmail: "Email address",
+    formPhone: "Phone / WhatsApp",
+    formService: "Service you need",
+    formChoose: "Choose a service",
+    formDate: "Event date (optional)",
+    formBudget: "Budget range (optional)",
+    formMessage: "Tell us a little about the project",
+    formSubmit: "Preview enquiry",
+    formNotice: "This is a demo form only. Your enquiry has not been sent or saved.",
+    contactDetails: "Sunil's phone, WhatsApp, email and Instagram details will be connected before launch.",
+    footerLine: "Capturing moments. Crafting memories.",
+    quickLinks: "Explore",
+    services: "Services",
+    contact: "Contact",
+    demoLabel: "Demo image",
+    allRights: "All sample projects and images are for demonstration only."
   },
   hi: {
-    navWork: "चुना हुआ काम", navServices: "सेवाएँ", navAbout: "परिचय", navContact: "संपर्क",
-    eyebrow: "फोटोग्राफी · फिल्में · एडिटिंग",
-    heroTitle: "ऐसी कहानियाँ, जिनमें हो",
-    heroAccent: "गोल्डन ऑवर का जादू।",
-    heroText: "सच्चे पल, कलात्मक अंदाज़ में। आपकी यादों को करीब रखने वाली सिनेमैटिक तस्वीरें और फिल्में।",
-    explore: "पोर्टफोलियो देखें", contact: "साथ मिलकर कुछ बनाएँ",
-    note: "सैंपल पोर्टफोलियो — डेमो तस्वीरें",
-    selected: "कुछ कहानियाँ,",
-    selectedAccent: "खूबसूरती से कही गईं।",
-    selectedText: "उन पलों और एहसासों की झलक जिन्हें Golden Films कैमरे में कैद करना पसंद करता है।",
-    viewAll: "सभी श्रेणियाँ देखें",
-    servicesEyebrow: "हम क्या करते हैं",
-    servicesTitle: "ऐसे पल, जो याद रहें।",
-    servicesText: "पहले फ्रेम से अंतिम कलर ग्रेड तक, हर बारीकी का अपना महत्व है।",
-    aboutEyebrow: "कैमरे के पीछे",
-    aboutTitle: "नज़र बारीकियों पर। दिल कहानियों के साथ।",
-    aboutText: "Golden Films, Sunil का क्रिएटिव पोर्टफोलियो है — फोटोग्राफी, फिल्ममेकिंग और पोस्ट-प्रोडक्शन के ज़रिए कहानियों को गर्मजोशी और उद्देश्य के साथ पेश करता है।",
-    aboutNote: "Sunil का व्यक्तिगत परिचय और वास्तविक प्रोजेक्ट की जानकारी बाद में जोड़ी जाएगी।",
-    reelEyebrow: "चलती तस्वीरों का एहसास",
-    reelTitle: "छोटे पल। हमेशा रहने वाली फिल्में।",
-    reelText: "यहाँ सिनेमैटिक शो-रील दिखाई जाएगी। फिलहाल यह Golden Films के अनुभव की एक झलक है।",
-    enquire: "पूछताछ करें", contactEyebrow: "आपकी कहानी, अगली",
-    contactTitle: "कुछ खास सोच रहे हैं?",
-    contactText: "अपनी योजना के बारे में बताएँ। आगे की प्रक्रिया हम मिलकर तय करेंगे।",
-    formName: "आपका नाम", formEmail: "ईमेल पता", formService: "आपको किस सेवा की ज़रूरत है?",
-    formMessage: "थोड़ा विस्तार से बताएँ", formSend: "पूछताछ तैयार करें", formHint: "यह डेमो फॉर्म अभी आपकी निजी जानकारी न भेजता है, न सेव करता है।",
-    footer: "ध्यान से बनाया, रोशनी में सँवारा।", demo: "डेमो तस्वीर",
-    categories: ["शादी", "प्री-वेडिंग", "पोर्ट्रेट", "फैशन", "इवेंट", "प्रोडक्ट"],
-    serviceNames: ["फोटोग्राफी", "सिनेमैटिक फिल्में", "फोटो रीटचिंग", "वीडियो एडिटिंग"],
-    serviceDescriptions: ["पोर्ट्रेट, समारोह, प्रोडक्ट और रोज़मर्रा के खास पल।", "वेडिंग फिल्में, इवेंट स्टोरी और प्रमोशनल वीडियो।", "बारीक रीटचिंग, कलर बैलेंस और बेहतर फाइनल तस्वीरें।", "एडिटिंग, कलर ग्रेडिंग और वर्टिकल शॉर्ट वीडियो।"],
-    formServices: ["वेडिंग फोटोग्राफी", "प्री-वेडिंग", "पोर्ट्रेट / फैशन", "इवेंट कवरेज", "प्रोडक्ट / कमर्शियल", "सिनेमैटिक वीडियो", "फोटो एडिटिंग", "वीडियो एडिटिंग", "अन्य"]
+    nav: ["होम", "पोर्टफोलियो", "सेवाएँ", "परिचय", "शो-रील", "संपर्क"],
+    eyebrow: "फोटोग्राफी · फिल्ममेकिंग · एडिटिंग",
+    heroTitle: "पलों को यादगार कहानियों में बदलें।",
+    heroText: "खास पलों और ब्रांड्स के लिए फोटोग्राफी, सिनेमैटिक फिल्में और बेहतरीन एडिटिंग।",
+    viewPortfolio: "पोर्टफोलियो देखें",
+    contactSunil: "सुनील से संपर्क करें",
+    demo: "डेमो पोर्टफोलियो",
+    sampleNotice: "ये नमूना तस्वीरें केवल वेबसाइट के प्रीव्यू के लिए हैं — ये सुनील के वास्तविक क्लाइंट प्रोजेक्ट नहीं हैं।",
+    categoriesEyebrow: "हमारा काम देखें",
+    categoriesTitle: "पोर्टफोलियो कैटेगरी",
+    categoriesText: "पोर्ट्रेट से लेकर सिनेमैटिक समारोहों तक, हर कहानी के लिए एक जगह।",
+    filters: ["सभी काम", "फोटोग्राफी", "वीडियोग्राफी", "एडिटिंग"],
+    featuredEyebrow: "चुनी हुई कहानियाँ",
+    featuredTitle: "फीचर्ड पोर्टफोलियो",
+    featuredText: "यह आपके काम को दिखाने के तरीके का एक छोटा प्रीव्यू है।",
+    servicesEyebrow: "हम क्या बनाते हैं",
+    servicesTitle: "क्रिएटिव सेवाएँ",
+    servicesText: "आपके विजुअल्स को शूट करने, सँवारने और पूरा करने के लिए एक क्रिएटिव पार्टनर।",
+    learnMore: "कैटेगरी देखें",
+    aboutEyebrow: "कैमरे के पीछे की रचनात्मकता",
+    aboutTitle: "हर कहानी को समझकर बनाया गया काम।",
+    aboutText: "Golden Films, सुनील का क्रिएटिव पोर्टफोलियो है, जिसमें फोटोग्राफी, फिल्ममेकिंग, फोटो एडिटिंग और वीडियो एडिटिंग शामिल हैं। सुनील का वास्तविक परिचय और प्रोजेक्ट कहानियाँ जानकारी मिलने और मंजूरी के बाद जोड़ी जाएँगी।",
+    aboutPlaceholder: "व्यक्तिगत परिचय बाद में जोड़ा जाएगा",
+    showreelEyebrow: "चलती तस्वीरों की कहानी",
+    showreelTitle: "शो-रील प्रीव्यू",
+    showreelText: "ये डेमो थंबनेल हैं। मंजूर किए गए वीडियो उपलब्ध होने पर असली फिल्म लिंक जोड़े जा सकते हैं।",
+    previewOnly: "केवल प्रीव्यू",
+    contactEyebrow: "आइए कुछ खास बनाएँ",
+    contactTitle: "अपनी कहानी के बारे में बताएँ।",
+    contactText: "अभी यह फॉर्म केवल दृश्य प्रीव्यू है। मुफ्त बैकएंड और स्पैम सुरक्षा तैयार होने के बाद enquiries चालू होंगी।",
+    formName: "आपका नाम",
+    formEmail: "ईमेल पता",
+    formPhone: "फोन / WhatsApp",
+    formService: "आपको कौन-सी सेवा चाहिए?",
+    formChoose: "सेवा चुनें",
+    formDate: "कार्यक्रम की तारीख (वैकल्पिक)",
+    formBudget: "बजट सीमा (वैकल्पिक)",
+    formMessage: "अपने प्रोजेक्ट के बारे में बताएँ",
+    formSubmit: "Enquiry प्रीव्यू",
+    formNotice: "यह केवल डेमो फॉर्म है। आपकी enquiry न भेजी गई है और न सेव हुई है।",
+    contactDetails: "सुनील के फोन, WhatsApp, ईमेल और Instagram विवरण वेबसाइट लाइव होने से पहले जोड़े जाएँगे।",
+    footerLine: "पलों को सँजोना। यादें बनाना।",
+    quickLinks: "लिंक",
+    services: "सेवाएँ",
+    contact: "संपर्क",
+    demoLabel: "डेमो इमेज",
+    allRights: "सभी नमूना प्रोजेक्ट और तस्वीरें केवल प्रदर्शन के लिए हैं।"
   }
-};
+} as const;
 
-const projects = [
-  { title: "The Golden Vows", category: "Wedding Photography", image: "photo-1519741497674-611481863552", size: "tall" },
-  { title: "Before the Forever", category: "Pre-Wedding", image: "photo-1537633552985-df8429e8048b", size: "wide" },
-  { title: "Quiet Confidence", category: "Portrait", image: "photo-1534528741775-53994a69daeb", size: "normal" },
-  { title: "Form & Feeling", category: "Fashion", image: "photo-1529139574466-a303027c1d8b", size: "normal" },
-  { title: "A Night to Remember", category: "Events", image: "photo-1492684223066-81342ee5ff30", size: "wide" },
-  { title: "Objects of Desire", category: "Product", image: "photo-1542291026-7eec264c27ff", size: "normal" }
-];
-
+const groupForFilter: Array<PortfolioGroup | "all"> = ["all", "photography", "videography", "editing"];
 const services = [
-  { icon: Camera, key: 0 },
-  { icon: Clapperboard, key: 1 },
-  { icon: Sparkles, key: 2 },
-  { icon: Clapperboard, key: 3 }
+  { id: "photography", icon: Camera, title: { en: "Photography", hi: "फोटोग्राफी" }, detail: { en: "Weddings, pre-weddings, portraits, events, fashion and products.", hi: "शादी, प्री-वेडिंग, पोर्ट्रेट, इवेंट, फैशन और प्रोडक्ट शूट।" } },
+  { id: "videography", icon: Film, title: { en: "Videography", hi: "वीडियोग्राफी" }, detail: { en: "Cinematic wedding films, events, travel and brand stories.", hi: "सिनेमैटिक वेडिंग फिल्में, इवेंट, ट्रैवल और ब्रांड स्टोरीज़।" } },
+  { id: "photo-editing", icon: WandSparkles, title: { en: "Photo editing", hi: "फोटो एडिटिंग" }, detail: { en: "Retouching, color correction and creative finishing.", hi: "रीटचिंग, कलर करेक्शन और क्रिएटिव फिनिशिंग।" } },
+  { id: "video-editing", icon: Clapperboard, title: { en: "Video editing", hi: "वीडियो एडिटिंग" }, detail: { en: "Cinematic cuts, color grading, reels and short-form edits.", hi: "सिनेमैटिक कट्स, कलर ग्रेडिंग, रील्स और शॉर्ट एडिट्स।" } }
 ];
-
-function photoUrl(id: string, width = 1000) {
-  return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${width}&q=82`;
-}
+const filterKeys = ["all", "photography", "videography", "editing"] as const;
 
 export default function App() {
   const [language, setLanguage] = useState<Language>("en");
+  const [activeFilter, setActiveFilter] = useState<PortfolioGroup | "all">("all");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [formPreview, setFormPreview] = useState(false);
   const t = copy[language];
+  const filteredCategories = useMemo(
+    () => activeFilter === "all" ? categories : categories.filter((item) => item.group === activeFilter),
+    [activeFilter]
+  );
 
-  const scrollTo = (id: string) => {
-    setMenuOpen(false);
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+  const handleEnquiryPreview = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormPreview(true);
   };
 
-  const handleEnquiry = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const subject = encodeURIComponent("Golden Films — Portfolio enquiry");
-    const body = encodeURIComponent(
-      `Name: ${form.get("name")}\nEmail: ${form.get("email")}\nService: ${form.get("service")}\nMessage: ${form.get("message")}\n\nDemo website: please confirm the real contact email before launch.`
-    );
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  const jumpToCategories = (filter: PortfolioGroup | "all" = "all") => {
+    setActiveFilter(filter);
+    setMenuOpen(false);
+    document.getElementById("categories")?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
     <div className="site-shell">
-      <div className="demo-ribbon"><span className="ribbon-dot" /> {t.note}</div>
+      <div className="demo-banner"><Sparkles size={14} /> {t.sampleNotice}</div>
       <header className="site-header">
-        <button className="brand" onClick={() => scrollTo("home")} aria-label="Golden Films home">
-          <span className="brand-mark">G<span>F</span></span>
-          <span className="brand-copy"><strong>GOLDEN FILMS</strong><small>VISUAL STORIES BY SUNIL</small></span>
+        <a className="brand" href="#home" aria-label="Golden Films home">
+          <span className="brand-mark"><Aperture size={28} strokeWidth={1.6} /></span>
+          <span className="brand-copy"><strong>GOLDEN <em>FILMS</em></strong><small>PHOTOGRAPHY · FILMS · EDITING</small></span>
+        </a>
+        <button className="mobile-menu-toggle" type="button" aria-label={menuOpen ? "Close navigation" : "Open navigation"} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+          {menuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
         <nav className={`main-nav ${menuOpen ? "is-open" : ""}`} aria-label="Main navigation">
-          <button onClick={() => scrollTo("work")}>{t.navWork}</button>
-          <button onClick={() => scrollTo("services")}>{t.navServices}</button>
-          <button onClick={() => scrollTo("about")}>{t.navAbout}</button>
-          <button className="nav-contact" onClick={() => scrollTo("contact")}>{t.navContact} <ArrowDownRight size={15} /></button>
+          {t.nav.map((label, index) => {
+            const targets = ["home", "categories", "services", "about", "showreel", "contact"];
+            return <a key={targets[index]} href={`#${targets[index]}`} onClick={() => setMenuOpen(false)}>{label}</a>;
+          })}
         </nav>
         <div className="header-actions">
-          <div className="language-switch" aria-label="Choose language">
-            <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>EN</button>
-            <span>/</span>
-            <button className={language === "hi" ? "active" : ""} onClick={() => setLanguage("hi")}>हि</button>
+          <div className="language-toggle" aria-label="Choose language">
+            <Languages size={15} aria-hidden="true" />
+            <button type="button" className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} aria-pressed={language === "en"}>EN</button>
+            <span aria-hidden="true">/</span>
+            <button type="button" className={language === "hi" ? "active" : ""} onClick={() => setLanguage("hi")} aria-pressed={language === "hi"}>हिंदी</button>
           </div>
-          <button className="menu-toggle" aria-label={menuOpen ? "Close menu" : "Open menu"} onClick={() => setMenuOpen(!menuOpen)}>
-            {menuOpen ? <X size={21} /> : <Menu size={21} />}
-          </button>
+          <a className="button button-gold header-cta" href="#contact">{t.contactSunil}<ArrowRight size={15} /></a>
         </div>
       </header>
 
       <main>
-        <section className="hero" id="home">
-          <div className="hero-image" role="img" aria-label="Demo wedding photography in warm evening light" />
-          <div className="hero-shade" />
-          <div className="hero-content">
+        <section className="hero section-wrap" id="home">
+          <div className="hero-copy">
             <p className="eyebrow"><span />{t.eyebrow}</p>
-            <h1>{t.heroTitle}<br /><em>{t.heroAccent}</em></h1>
-            <p className="hero-text">{t.heroText}</p>
-            <div className="hero-actions">
-              <button className="button button-light" onClick={() => scrollTo("work")}>{t.explore} <ArrowRight size={16} /></button>
-              <button className="text-link" onClick={() => scrollTo("contact")}>{t.contact}</button>
+            <h1>{t.heroTitle}</h1>
+            <p className="hero-services">Photography <b>·</b> Videography <b>·</b> Photo Editing <b>·</b> Video Editing</p>
+            <p className="hero-description">{t.heroText}</p>
+            <div className="hero-buttons">
+              <a className="button button-gold" href="#categories">{t.viewPortfolio}<ArrowDownRight size={17} /></a>
+              <a className="button button-outline" href="#contact"><MessageCircle size={16} />{t.contactSunil}</a>
+            </div>
+            <div className="hero-facts">
+              <div><strong>14</strong><span>{language === "en" ? "Portfolio categories" : "पोर्टफोलियो कैटेगरी"}</span></div>
+              <div><strong>04</strong><span>{language === "en" ? "Core creative services" : "मुख्य क्रिएटिव सेवाएँ"}</span></div>
+              <div><strong>EN <i>·</i> हिं</strong><span>{language === "en" ? "Bilingual experience" : "दो भाषाओं में वेबसाइट"}</span></div>
             </div>
           </div>
-          <div className="hero-bottom"><span>01 / 06</span><span className="hero-bottom-line" /><span>JAIPUR · INDIA</span></div>
-          <span className="hero-side-note">SAMPLE VISUALS · NOT CLIENT WORK</span>
-        </section>
-
-        <section className="intro section-wrap" id="work">
-          <div className="section-heading">
-            <p className="eyebrow"><span />SELECTED STORIES</p>
-            <h2>{t.selected}<br /><em>{t.selectedAccent}</em></h2>
+          <div className="hero-visual">
+            <img src={heroImage} alt={language === "en" ? "Wedding celebration — demo portfolio image" : "शादी समारोह — डेमो पोर्टफोलियो इमेज"} fetchPriority="high" />
+            <div className="hero-image-shade" />
+            <div className="hero-image-note"><span>{t.demo}</span><small>{language === "en" ? "Sample wedding story" : "शादी की नमूना कहानी"}</small></div>
+            <div className="hero-image-index">01 <span>/</span> 14</div>
           </div>
-          <div className="intro-aside"><p>{t.selectedText}</p><span className="aside-rule" /><span className="small-label">01 — 06 / PORTFOLIO PREVIEW</span></div>
+          <div className="hero-bottom-line"><span /> {language === "en" ? "Visual stories for moments that matter" : "खास पलों के लिए विजुअल कहानियाँ"} <ArrowRight size={14} /></div>
         </section>
 
-        <section className="portfolio-grid section-wrap" aria-label="Demo portfolio">
-          {projects.map((project, index) => (
-            <article className={`project-card ${project.size}`} key={project.title}>
-              <div className="project-image-wrap">
-                <img src={photoUrl(project.image, 1100)} alt={`${project.category} sample portfolio image`} loading={index < 2 ? "eager" : "lazy"} />
-                <span className="image-demo-tag">{t.demo}</span>
-                <span className="project-index">0{index + 1}</span>
-                <button className="project-open" aria-label={`View sample ${project.title}`} onClick={() => scrollTo("contact")}><ArrowDownRight size={20} /></button>
-              </div>
-              <div className="project-caption"><div><h3>{project.title}</h3><p>{project.category}</p></div><span>DEMO</span></div>
-            </article>
+        <section className="service-strip section-wrap" aria-label="Creative services">
+          {services.map(({ id, icon: Icon, title, detail }) => (
+            <button className="service-strip-item" key={id} type="button" onClick={() => jumpToCategories(id === "photo-editing" ? "editing" : id === "video-editing" ? "editing" : id as PortfolioGroup)}>
+              <span className="service-icon"><Icon size={22} strokeWidth={1.6} /></span>
+              <span><strong>{title[language]}</strong><small>{detail[language]}</small></span>
+              <ArrowRight className="strip-arrow" size={15} />
+            </button>
           ))}
-          <button className="category-link" onClick={() => scrollTo("services")}>{t.viewAll} <ArrowRight size={17} /></button>
         </section>
 
-        <section className="services-section" id="services">
-          <div className="section-wrap services-inner">
-            <div className="services-heading">
-              <p className="eyebrow"><span />{t.servicesEyebrow}</p>
-              <h2>{t.servicesTitle}</h2><p>{t.servicesText}</p>
-            </div>
-            <div className="service-list">
-              {services.map(({ icon: Icon, key }) => (
-                <button className="service-row" key={key} onClick={() => scrollTo("contact")}>
-                  <span className="service-icon"><Icon size={19} strokeWidth={1.5} /></span>
-                  <span className="service-copy"><strong>{t.serviceNames[key]}</strong><small>{t.serviceDescriptions[key]}</small></span>
-                  <ArrowDownRight className="service-arrow" size={20} />
-                </button>
-              ))}
-            </div>
+        <section className="section-block section-wrap" id="categories">
+          <div className="section-heading">
+            <div><p className="eyebrow">{t.categoriesEyebrow}</p><h2>{t.categoriesTitle}</h2><p className="section-subtitle">{t.categoriesText}</p></div>
+            <a href="#featured" className="text-link">{language === "en" ? "View featured work" : "फीचर्ड काम देखें"} <ArrowRight size={16} /></a>
+          </div>
+          <div className="filter-row" role="group" aria-label="Filter portfolio categories">
+            {filterKeys.map((key, index) => <button key={key} type="button" className={activeFilter === key ? "filter-chip active" : "filter-chip"} aria-pressed={activeFilter === key} onClick={() => setActiveFilter(groupForFilter[index])}>{t.filters[index]}</button>)}
+          </div>
+          <div className="category-grid">
+            {filteredCategories.map((category, index) => (
+              <article className="category-card" key={category.id} style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}>
+                <a href="#featured" className="category-image" onClick={() => setActiveFilter(category.group)} aria-label={category.title[language]}>
+                  <img src={category.image} alt={category.imageAlt[language]} loading="lazy" />
+                  <span className="image-vignette" />
+                  <span className="demo-tag">{t.demo}</span>
+                  <span className="category-number">{String(categories.findIndex((item) => item.id === category.id) + 1).padStart(2, "0")}</span>
+                  <span className="category-open"><ArrowDownRight size={17} /></span>
+                </a>
+                <div className="category-card-copy"><h3>{category.title[language]}</h3><p>{category.group === "photography" ? (language === "en" ? "Photography" : "फोटोग्राफी") : category.group === "videography" ? (language === "en" ? "Films & motion" : "फिल्में और वीडियो") : (language === "en" ? "Creative editing" : "क्रिएटिव एडिटिंग")}</p></div>
+              </article>
+            ))}
+          </div>
+          <div className="categories-footnote"><ImageIcon size={15} /> {language === "en" ? "All imagery in this preview is sample content and can be replaced in the future admin panel." : "इस प्रीव्यू की सभी तस्वीरें नमूना सामग्री हैं; भविष्य में Admin Panel से इन्हें बदला जा सकेगा।"}</div>
+        </section>
+
+        <section className="featured-section section-wrap" id="featured">
+          <div className="section-heading">
+            <div><p className="eyebrow">{t.featuredEyebrow}</p><h2>{t.featuredTitle}</h2><p className="section-subtitle">{t.featuredText}</p></div>
+            <button type="button" className="text-link text-button" onClick={() => jumpToCategories("all")}>{language === "en" ? "Browse all categories" : "सभी कैटेगरी देखें"} <ArrowRight size={16} /></button>
+          </div>
+          <div className="featured-grid">
+            {projects.filter((project) => project.featured).map((project, index) => (
+              <article className={`project-card project-card-${index + 1}`} key={project.id}>
+                <div className="project-image">
+                  <img src={project.image} alt={project.imageAlt[language]} loading="lazy" />
+                  <div className="project-image-overlay" />
+                  <span className="demo-tag">{t.demo}</span>
+                  <span className="project-index">0{index + 1}</span>
+                </div>
+                <div className="project-card-copy"><p>{project.category[language]}</p><h3>{project.title[language]}</h3><span>{t.previewOnly}</span></div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="services-section section-wrap" id="services">
+          <div className="section-heading">
+            <div><p className="eyebrow">{t.servicesEyebrow}</p><h2>{t.servicesTitle}</h2><p className="section-subtitle">{t.servicesText}</p></div>
+          </div>
+          <div className="services-grid">
+            {services.map(({ id, icon: Icon, title, detail }, index) => (
+              <button type="button" className="service-card" key={id} onClick={() => jumpToCategories(id.includes("editing") ? "editing" : id as PortfolioGroup)}>
+                <span className="service-card-top"><span className="service-icon large"><Icon size={25} strokeWidth={1.5} /></span><span className="service-card-number">0{index + 1}</span></span>
+                <h3>{title[language]}</h3><p>{detail[language]}</p><span className="service-card-link">{t.learnMore}<ArrowRight size={15} /></span>
+              </button>
+            ))}
           </div>
         </section>
 
         <section className="about-section section-wrap" id="about">
-          <div className="about-image">
-            <img src={photoUrl("photo-1516035069371-29a1b244cc32", 1000)} alt="Camera equipment, demo visual" loading="lazy" />
-            <span className="image-demo-tag">DEMO IMAGE</span>
+          <div className="about-visual">
+            <img src="https://images.unsplash.com/photo-1452587925148-ce544e77e70d?auto=format&fit=crop&w=1100&q=82" alt={language === "en" ? "Photographer at work — demo image" : "काम करते फोटोग्राफर — डेमो इमेज"} loading="lazy" />
+            <span className="about-stamp"><Aperture size={22} /><span>GOLDEN<br />FILMS</span></span>
+            <p className="about-caption">{t.aboutPlaceholder}</p>
           </div>
           <div className="about-copy">
-            <p className="eyebrow"><span />{t.aboutEyebrow}</p>
-            <h2>{t.aboutTitle}</h2>
-            <p className="about-text">{t.aboutText}</p>
-            <p className="about-placeholder">{t.aboutNote}</p>
-            <button className="underlined-link" onClick={() => scrollTo("contact")}>{t.contact} <ArrowRight size={16} /></button>
+            <p className="eyebrow">{t.aboutEyebrow}</p><h2>{t.aboutTitle}</h2><p>{t.aboutText}</p>
+            <div className="about-signature"><span className="signature-mark">S.</span><span><strong>Sunil</strong><small>{language === "en" ? "Photographer · Videographer · Editor" : "फोटोग्राफर · वीडियोग्राफर · एडिटर"}</small></span></div>
+            <button type="button" className="button button-outline" onClick={() => document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" })}>{t.contactSunil}<ArrowRight size={16} /></button>
           </div>
         </section>
 
-        <section className="reel-section">
-          <div className="reel-background" />
-          <div className="reel-content">
-            <p className="eyebrow"><span />{t.reelEyebrow}</p>
-            <h2>{t.reelTitle}</h2>
-            <p>{t.reelText}</p>
-            <span className="reel-stamp"><Clapperboard size={18} /> GOLDEN FILMS · SAMPLE SHOWREEL</span>
+        <section className="showreel-section section-wrap" id="showreel">
+          <div className="section-heading">
+            <div><p className="eyebrow">{t.showreelEyebrow}</p><h2>{t.showreelTitle}</h2><p className="section-subtitle">{t.showreelText}</p></div>
+          </div>
+          <div className="showreel-grid">
+            {projects.filter((project) => project.group === "videography" || project.group === "editing").slice(0, 3).map((project, index) => (
+              <article className="showreel-card" key={project.id}>
+                <div className="showreel-image"><img src={project.image} alt={project.imageAlt[language]} loading="lazy" /><span className="demo-tag">{t.demo}</span><span className="play-button" aria-hidden="true"><Play size={18} fill="currentColor" /></span><span className="showreel-duration">0{index + 1} · DEMO</span></div>
+                <h3>{project.title[language]}</h3><p>{project.category[language]}</p>
+              </article>
+            ))}
           </div>
         </section>
 
         <section className="contact-section section-wrap" id="contact">
-          <div className="contact-heading">
-            <p className="eyebrow"><span />{t.contactEyebrow}</p>
-            <h2>{t.contactTitle}</h2>
-            <p>{t.contactText}</p>
-            <div className="contact-methods">
-              <span><MessageCircle size={17} /> WhatsApp — details to be added</span>
-              <span><Phone size={17} /> Phone — details to be added</span>
-              <span><Mail size={17} /> Email — details to be added</span>
-              <span><Instagram size={17} /> Instagram — details to be added</span>
-            </div>
+          <div className="contact-copy">
+            <p className="eyebrow">{t.contactEyebrow}</p><h2>{t.contactTitle}</h2><p>{t.contactText}</p>
+            <div className="contact-info-card"><span className="contact-info-icon"><MessageCircle size={21} /></span><div><strong>{language === "en" ? "Contact details" : "संपर्क विवरण"}</strong><p>{t.contactDetails}</p></div></div>
+            <div className="contact-methods"><span><Check size={14} /> WhatsApp</span><span><Check size={14} /> Phone</span><span><Check size={14} /> Email</span><span><Check size={14} /> Instagram</span></div>
           </div>
-          <form className="enquiry-form" onSubmit={handleEnquiry}>
-            <label>{t.formName}<input name="name" required autoComplete="name" /></label>
-            <label>{t.formEmail}<input name="email" type="email" required autoComplete="email" /></label>
-            <label>{t.formService}<select name="service" required defaultValue=""><option value="" disabled>—</option>{t.formServices.map((service) => <option key={service}>{service}</option>)}</select></label>
-            <label>{t.formMessage}<textarea name="message" rows={3} required /></label>
-            <button className="button button-dark" type="submit">{t.formSend} <ArrowRight size={16} /></button>
-            <p className="form-hint">{t.formHint}</p>
+          <form className="enquiry-form" onSubmit={handleEnquiryPreview}>
+            <div className="form-heading"><span className="eyebrow">{language === "en" ? "ENQUIRY PREVIEW" : "पूछताछ प्रीव्यू"}</span><span className="form-preview-pill">{language === "en" ? "Not connected yet" : "अभी कनेक्ट नहीं है"}</span></div>
+            <div className="form-grid">
+              <label>{t.formName}<input name="name" placeholder={language === "en" ? "Your full name" : "आपका पूरा नाम"} required /></label>
+              <label>{t.formEmail}<input name="email" type="email" placeholder="you@example.com" required /></label>
+              <label>{t.formPhone}<input name="phone" type="tel" placeholder="+91 ..." /></label>
+              <label>{t.formService}<select name="service" defaultValue="" required><option value="" disabled>{t.formChoose}</option>{services.map((item) => <option key={item.id} value={item.id}>{item.title[language]}</option>)}</select></label>
+              <label>{t.formDate}<input name="date" type="date" /></label>
+              <label>{t.formBudget}<select name="budget" defaultValue=""><option value="">{language === "en" ? "Select range" : "सीमा चुनें"}</option><option value="undecided">{language === "en" ? "To be discussed" : "बातचीत के अनुसार"}</option><option value="small">{language === "en" ? "Budget-friendly" : "कम बजट"}</option><option value="custom">{language === "en" ? "Custom project" : "कस्टम प्रोजेक्ट"}</option></select></label>
+              <label className="form-full">{t.formMessage}<textarea name="message" rows={4} placeholder={language === "en" ? "Share the details you already know..." : "जो जानकारी उपलब्ध है, वह लिखें..."} required /></label>
+            </div>
+            <button className="button button-gold form-submit" type="submit">{t.formSubmit}<Send size={16} /></button>
+            {formPreview && <p className="form-notice" role="status">{t.formNotice}</p>}
           </form>
         </section>
       </main>
 
-      <footer className="site-footer">
-        <button className="brand footer-brand" onClick={() => scrollTo("home")}><span className="brand-mark">G<span>F</span></span><span className="brand-copy"><strong>GOLDEN FILMS</strong><small>VISUAL STORIES BY SUNIL</small></span></button>
-        <p>{t.footer}</p>
-        <div><span>© {new Date().getFullYear()} GOLDEN FILMS</span><span>DEMO BUILD · EN / HI</span></div>
+      <footer className="site-footer section-wrap">
+        <div className="footer-brand"><a className="brand" href="#home"><span className="brand-mark"><Aperture size={25} /></span><span className="brand-copy"><strong>GOLDEN <em>FILMS</em></strong><small>PHOTOGRAPHY · FILMS · EDITING</small></span></a><p>{t.footerLine}</p><span className="footer-demo"><Sparkles size={13} /> {t.demo}</span></div>
+        <div className="footer-column"><h3>{t.quickLinks}</h3><a href="#home">{t.nav[0]}</a><a href="#categories">{t.nav[1]}</a><a href="#featured">{t.featuredTitle}</a><a href="#about">{t.nav[3]}</a></div>
+        <div className="footer-column"><h3>{t.services}</h3>{services.map((item) => <button type="button" key={item.id} onClick={() => jumpToCategories(item.id.includes("editing") ? "editing" : item.id as PortfolioGroup)}>{item.title[language]}</button>)}</div>
+        <div className="footer-column"><h3>{t.contact}</h3><a href="#contact">{t.contactSunil}</a><a href="#contact">WhatsApp · Phone</a><a href="#contact">Email · Instagram</a><span className="footer-muted">{language === "en" ? "Official details will be added before launch." : "लाइव करने से पहले असली विवरण जोड़े जाएँगे।"}</span></div>
+        <div className="footer-bottom"><span>© {new Date().getFullYear()} Golden Films</span><span>{t.allRights}</span><a href="#home">Back to top ↑</a></div>
       </footer>
     </div>
   );
