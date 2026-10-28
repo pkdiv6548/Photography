@@ -259,7 +259,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       "photography", "videography", "photo-editing", "video-editing"
     ]);
     const consent = body.consent === true;
-    const validPhone = !input.phone || /^[+()\d .-]{7,30}$/.test(input.phone);
+    const phoneValue = input.phone ?? "";
+    const phoneDigitCount = phoneValue.replace(/\D/g, "").length;
+    const validPhone = !phoneValue || (/^[+()\d .-]{7,30}$/.test(phoneValue) && phoneDigitCount >= 7);
     const valid =
       input.name.length >= 2 &&
       Boolean(input.email || input.phone) &&

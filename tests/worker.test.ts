@@ -58,6 +58,25 @@ test("oversized enquiry body is rejected even without a declared content length"
   assert.deepEqual(await response.json(), { error: "request_too_large" });
 });
 
+test("phone-only enquiry rejects a phone number without enough digits", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Sample Visitor",
+        phone: "-------",
+        service: "photography",
+        message: "Please contact me about photography services.",
+        consent: true
+      })
+    }),
+    emptyEnv
+  );
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "validation_failed" });
+});
+
 test("invalid enquiry fields are rejected before database access", async () => {
   const response = await worker.fetch(
     new Request("https://example.test/api/v1/enquiries", {
