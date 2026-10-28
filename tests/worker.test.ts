@@ -463,3 +463,30 @@ test("enquiry endpoint accepts case-insensitive application/json with charset pa
     assert.deepEqual(await response.json(), { error: "database_not_configured" }, contentType);
   }
 });
+
+
+test("same-origin requests are allowed while cross-origin preflights are rejected", async () => {
+  const sameOrigin = await worker.fetch(
+    new Request("https://example.test/api/health", {
+      headers: { Origin: "https://example.test" }
+    }),
+    emptyEnv
+  );
+  assert.equal(sameOrigin.status, 200);
+  assert.deepEqual(await sameOrigin.json(), { status: "ok", service: "golden-films-api" });
+
+  const crossOriginPreflight = await worker.fetch(
+    new Request("https://example.test/api/enquiries", {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://attacker.example",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type"
+      }
+    }),
+    emptyEnv
+  );
+  assert.equal(crossOriginPreflight.status, 403);
+  assert.deepEqual(await crossOriginPreflight.json(), { error: "origin_not_allowed" });
+  assert.equal(crossOriginPreflight.headers.get("X-Frame-Options"), "DENY");
+});
