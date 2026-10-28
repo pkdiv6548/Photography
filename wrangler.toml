@@ -3,8 +3,8 @@ main = "worker/index.ts"
 compatibility_date = "2026-10-28"
 
 # Build the frontend with `npm run build` before deploying.
-# The database ID was read from the authenticated Cloudflare account; database currently has zero tables.
-# Apply migrations only after reviewing the target account and confirming this is the intended database.
+# This is an existing D1 database with a legacy schema; it is NOT empty.
+# Do not apply migrations until the export is verified/restored and the forward plan is approved.
 [assets]
 directory = "./dist"
 binding = "ASSETS"
@@ -13,6 +13,6 @@ not_found_handling = "single-page-application"
 [[d1_databases]]
 binding = "DB"
 database_name = "golden-films-db"
-# Confirmed existing Cloudflare D1 database ID (currently empty).
+# Confirmed existing Cloudflare D1 database ID; the live schema differs from the current Worker contract.
 database_id = "0241231b-6e6c-410b-a5ac-958eeb424a78"
 migrations_dir = "migrations"
