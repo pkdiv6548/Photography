@@ -150,13 +150,17 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     try {
       const result = await env.DB.prepare(
-        `SELECT id, slug, title_en, title_hi, sort_order,
+        `SELECT c.id, c.slug, en.name AS title_en, hi.name AS title_hi, c.sort_order,
           CASE
-            WHEN slug IN ('wedding-photography', 'pre-wedding-photography', 'portrait-personal-photography', 'fashion-model-photography', 'event-photography', 'product-photography', 'commercial-photography') THEN 'photography'
-            WHEN slug IN ('cinematic-wedding-films', 'event-videography', 'promotional-commercial-videos', 'reels-short-form-videos', 'other-projects') THEN 'videography'
+            WHEN c.slug IN ('wedding-photography', 'pre-wedding-photography', 'portrait-personal-photography', 'fashion-model-photography', 'event-photography', 'product-photography', 'commercial-photography') THEN 'photography'
+            WHEN c.slug IN ('cinematic-wedding-films', 'event-videography', 'promotional-commercial-videos', 'reels-short-form-videos', 'other-projects') THEN 'videography'
             ELSE 'editing'
           END AS group_name
-         FROM categories ORDER BY sort_order, title_en`
+         FROM categories c
+         LEFT JOIN category_translations en ON en.category_id = c.id AND en.language = 'en'
+         LEFT JOIN category_translations hi ON hi.category_id = c.id AND hi.language = 'hi'
+         WHERE c.is_published = 1
+         ORDER BY c.sort_order, en.name`
       ).all();
       return json({ categories: result.results ?? [], lang });
     } catch {
@@ -174,8 +178,8 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const category = url.searchParams.get("category");
     try {
       const query = category
-        ? env.DB.prepare("SELECT id, slug, category_slug, cover_image_url, status, is_featured, location, project_date, demo_label FROM projects WHERE status = 'published' AND category_slug = ? ORDER BY is_featured DESC, updated_at DESC LIMIT ?").bind(category, limit)
-        : env.DB.prepare("SELECT id, slug, category_slug, cover_image_url, status, is_featured, location, project_date, demo_label FROM projects WHERE status = 'published' ORDER BY is_featured DESC, updated_at DESC LIMIT ?").bind(limit);
+        ? env.DB.prepare("SELECT p.id, p.slug, c.slug AS category_slug, p.cover_object_key, p.status, p.featured AS is_featured, p.location, p.event_date AS project_date FROM projects p JOIN categories c ON c.id = p.category_id WHERE p.status = 'published' AND c.slug = ? ORDER BY p.featured DESC, p.updated_at DESC LIMIT ?").bind(category, limit)
+        : env.DB.prepare("SELECT p.id, p.slug, c.slug AS category_slug, p.cover_object_key, p.status, p.featured AS is_featured, p.location, p.event_date AS project_date FROM projects p JOIN categories c ON c.id = p.category_id WHERE p.status = 'published' ORDER BY p.featured DESC, p.updated_at DESC LIMIT ?").bind(limit);
       const result = await query.all();
       return json({ projects: result.results ?? [] });
     } catch {
@@ -239,16 +243,18 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const id = crypto.randomUUID();
     try {
       await env.DB.prepare(
-        "INSERT INTO enquiries (id, name, email, phone, service, preferred_date, budget_range, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO enquiries (id, name, email, phone, service, event_date, budget_range, message, consent, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)"
       ).bind(
         id,
         input.name,
         input.email,
-        input.phone,
+        input.phone || null,
         input.service,
         input.eventDate || null,
         input.budgetRange || null,
         input.message,
+        new Date().toISOString(),
+        new Date().toISOString(),
       ).run();
       return json({ ok: true, id, message: "Enquiry received. We will get back to you." }, 201);
     } catch {
