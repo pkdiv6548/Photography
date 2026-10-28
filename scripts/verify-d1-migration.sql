@@ -23,11 +23,11 @@ ORDER BY sort_order, slug;
 
 -- C. Exactly 28 category translations for the current 14-category baseline.
 -- Expected: translation_rows=28, categories_with_two_locales=14,
--- unexpected_locale_rows=0, missing_locale_pairs=0.
+-- categories_with_wrong_locale_count=0, categories_missing_locale=0.
 SELECT
-  COUNT(*) AS translation_rows,
-  SUM(CASE WHEN locale_count = 2 THEN 1 ELSE 0 END) AS categories_with_two_locales,
-  SUM(CASE WHEN locale_count <> 2 THEN 1 ELSE 0 END) AS categories_with_wrong_locale_count,
+  SUM(locale_count) AS translation_rows,
+  SUM(CASE WHEN locale_count = 2 AND has_en = 1 AND has_hi = 1 THEN 1 ELSE 0 END) AS categories_with_two_locales,
+  SUM(CASE WHEN locale_count <> 2 OR has_en = 0 OR has_hi = 0 THEN 1 ELSE 0 END) AS categories_with_wrong_locale_count,
   SUM(CASE WHEN has_en = 0 OR has_hi = 0 THEN 1 ELSE 0 END) AS categories_missing_locale
 FROM (
   SELECT
