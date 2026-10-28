@@ -246,7 +246,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       ).bind(
         id,
         input.name,
-        input.email,
+        input.email || null,
         input.phone || null,
         input.service,
         input.eventDate || null,
