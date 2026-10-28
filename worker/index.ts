@@ -59,6 +59,50 @@ function isValidDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+const RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
+const RATE_LIMIT_MAX_REQUESTS = 5;
+
+async function enforceEnquiryRateLimit(request: Request, env: Env): Promise<Response | null> {
+  const clientIp = request.headers.get("cf-connecting-ip") ?? "unknown";
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(clientIp));
+  const ipHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const windowStart = Math.floor(nowSeconds / RATE_LIMIT_WINDOW_SECONDS) * RATE_LIMIT_WINDOW_SECONDS;
+  const retryAfter = windowStart + RATE_LIMIT_WINDOW_SECONDS - nowSeconds;
+
+  try {
+    const row = await env.DB.prepare(
+      `INSERT INTO enquiry_rate_limits (ip_hash, window_start, request_count)
+       VALUES (?, ?, 1)
+       ON CONFLICT(ip_hash, window_start)
+       DO UPDATE SET request_count = request_count + 1
+       RETURNING request_count`
+    ).bind(ipHash, windowStart).first<{ request_count: number }>();
+
+    // Best-effort cleanup prevents old IP digests from accumulating indefinitely.
+    if (nowSeconds % 97 === 0) {
+      await env.DB.prepare("DELETE FROM enquiry_rate_limits WHERE window_start < ?")
+        .bind(nowSeconds - 48 * 60 * 60).run();
+    }
+
+    if (!row || row.request_count > RATE_LIMIT_MAX_REQUESTS) {
+      return new Response(JSON.stringify({ error: "Too many enquiry attempts. Please wait and try again." }), {
+        status: 429,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff",
+          "retry-after": String(retryAfter),
+        },
+      });
+    }
+    return null;
+  } catch {
+    // Fail closed if the limiter cannot be checked; never silently disable abuse protection.
+    return json({ error: "Enquiry service is temporarily unavailable. Please try again later." }, 503);
+  }
+}
+
 async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
@@ -104,6 +148,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!contentType.toLowerCase().includes("application/json")) {
       return json({ error: "Content-Type must be application/json." }, 415);
     }
+
+    const rateLimitResponse = await enforceEnquiryRateLimit(request, env);
+    if (rateLimitResponse) return rateLimitResponse;
 
     const declaredLength = Number(request.headers.get("content-length") ?? "0");
     if (declaredLength > 12_000) return json({ error: "Request is too large." }, 413);
