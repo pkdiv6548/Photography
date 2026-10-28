@@ -120,3 +120,17 @@ A fresh read-only catalog query returned 12 application tables plus Cloudflare's
 The target table `category_translations` is still absent from the live legacy schema. This reinforces that the baseline migration must not be applied unchanged. These counts are point-in-time observations only; rerun the audit immediately before any approved write.
 
 No production migration, import, or schema write was performed. Continue to block migration until the export file is verified and restored successfully in a disposable environment, and all documented mapping blockers are resolved.
+
+
+## Follow-up read-only integrity recheck (2026-10-28)
+
+A further read-only recheck of the configured D1 database confirmed the following point-in-time results:
+
+- `PRAGMA foreign_key_check` returned no rows.
+- `categories` contains 14 rows; `projects`, `enquiries`, `project_media`, and `project_translations` each contain 0 rows.
+- `admin_users`, `admin_sessions`, `audit_logs`, `auth_rate_limits`, `enquiry_rate_limits`, and `site_settings` each contain 0 rows.
+- `admin_setup` contains 1 row. Do not assume it is disposable or remove it; inspect its purpose only through an approved read-only review before any migration or admin setup action.
+- The legacy category primary keys remain distinct from their slugs (for example, `cat-wedding` vs `wedding-photography`). The live schema still lacks `category_translations` and remains incompatible with the Worker contract.
+- All successful checks reported `rows_written: 0` and `changed_db: false`.
+
+These are point-in-time observations, not a backup or restore test. The export remains unverified because the SQL file has not been independently downloaded, inspected, and restored in a disposable database. No live schema or data changes were made. Repeat the checks immediately before any separately approved production change.
