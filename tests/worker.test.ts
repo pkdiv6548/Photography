@@ -248,6 +248,9 @@ test("enquiry rate limit returns 429 and does not store the sixth request", asyn
           return { success: true, meta: { changes: 1 } };
         },
         async all<T>() {
+          if (query.includes("PRAGMA table_info(enquiries)")) {
+            return { success: true, results: [{ name: "email", notnull: 0 }] as T[] };
+          }
           return { success: true, results: [] as T[] };
         }
       };
