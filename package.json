@@ -8,7 +8,7 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty false && tsc -p tsconfig.worker.json",
-    "test": "node --experimental-strip-types --test tests/worker.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
