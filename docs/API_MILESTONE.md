@@ -30,3 +30,13 @@
 ## Zero-budget guardrail
 
 Do not enable paid services, add billing, or deploy to a paid plan without explicit approval. Verify the current Cloudflare dashboard limits and billing state before creating or using remote resources.
+
+
+## D1 schema compatibility follow-up (2026-10-28)
+
+The connected Cloudflare account's `golden-films-db` already contained the Golden Films schema, including admin/session/audit tables, project media tables, and the 14 seeded categories. The baseline migration and Worker were aligned to the existing schema without dropping or overwriting records.
+
+- Categories API derives the display group from the existing category slug because the current categories table has no `group_name` or `is_published` columns.
+- Enquiry inserts now use `preferred_date`, and empty strings for email/phone when the alternate contact method is supplied, matching the existing D1 constraints.
+- Direct read-only verification confirmed 14 categories and 0 existing enquiries; no test enquiry was inserted into the database.
+- No Worker deployment was performed. Live endpoint checks still require a deployed Worker.
