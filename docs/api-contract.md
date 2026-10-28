@@ -1,6 +1,6 @@
 # Golden Films API contract
 
-This is a scaffold for the Cloudflare Workers API. It is not deployed and is not connected to a live D1 database yet.
+This documents the Cloudflare Workers API scaffold. The Worker is not deployed. The configured `golden-films-db` D1 database exists, but a read-only inspection on 2026-10-28 found a legacy schema that does not match the current migration and Worker query contracts.
 
 ## Endpoints
 
@@ -20,8 +20,9 @@ The server rejects non-JSON requests, enforces a 16 KiB request-body limit while
 
 ## Setup status
 
-- The Wrangler configuration points to an existing D1 database that was confirmed in the connected account, but the database currently has zero tables. Migrations have not been run.
-- Apply migrations only after reviewing the target account and confirming the database is intended for this project.
+- The Wrangler configuration points to `golden-films-db`. Read-only SQL catalog inspection found existing tables and 14 category rows, despite Cloudflare metadata reporting `num_tables: 0`.
+- Existing schema examples include `categories(title_en, title_hi)`, `projects(category_slug, cover_image_url)`, and `project_media`; current Worker queries expect `category_translations`, `projects.category_id`, and `cover_object_key`. The baseline migration uses `CREATE TABLE IF NOT EXISTS`, so applying it would not reshape these existing tables and is not a safe migration plan.
+- Do not apply the baseline migrations to this database. First establish the schema/migration history, confirm ownership, and create/test an explicit forward migration that preserves existing data. No writes were made during inspection.
 - Never commit API tokens or secret values.
 - The API stores enquiries but does not send email notifications. Email delivery remains deferred until a genuinely free and suitable provider is verified.
 - R2 uploads, admin authentication, password recovery, email verification and the actual admin UI are not implemented in this milestone.
