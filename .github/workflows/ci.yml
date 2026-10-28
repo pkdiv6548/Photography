@@ -2,9 +2,9 @@ name: Website checks
 
 on:
   pull_request:
-    branches: [main, chore/project-foundation, feat/premium-portfolio, feat/d1-enquiry-api, feat/connect-enquiry-form, fix/d1-schema-compatibility]
+    branches: [main, chore/project-foundation, feat/premium-portfolio, feat/d1-enquiry-api, feat/connect-enquiry-form, fix/d1-schema-compatibility, feat/enquiry-rate-limit]
   push:
-    branches: [main, chore/project-foundation, feat/premium-portfolio, feat/d1-enquiry-api, feat/connect-enquiry-form, fix/d1-schema-compatibility]
+    branches: [main, chore/project-foundation, feat/premium-portfolio, feat/d1-enquiry-api, feat/connect-enquiry-form, fix/d1-schema-compatibility, feat/enquiry-rate-limit]
 
 permissions:
   contents: read
