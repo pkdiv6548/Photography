@@ -89,3 +89,21 @@ test("impossible calendar dates are rejected", async () => {
   assert.equal(response.status, 400);
   assert.equal((await response.json() as { error: string }).error, "validation_failed");
 });
+
+test("unsupported category language returns 400 before database access", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/categories?lang=fr"),
+    emptyEnv
+  );
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "invalid_language", supported: ["en", "hi"] });
+});
+
+test("invalid project limits return 400 before database access", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/projects?limit=0"),
+    emptyEnv
+  );
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "invalid_limit", allowed: "1-48" });
+});
