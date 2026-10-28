@@ -130,7 +130,7 @@ export default function App() {
   const [language, setLanguage] = useState<Language>("en");
   const [activeFilter, setActiveFilter] = useState<PortfolioGroup | "all">("all");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [formStatus, setFormStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [formStatus, setFormStatus] = useState<"idle" | "sending" | "success" | "error" | "contact-required">("idle");
   const t = copy[language];
   const filteredCategories = useMemo(
     () => activeFilter === "all" ? categories : categories.filter((item) => item.group === activeFilter),
@@ -143,7 +143,7 @@ export default function App() {
     const form = event.currentTarget;
     const data = new FormData(form);
     if (!data.get("email")?.toString().trim() && !data.get("phone")?.toString().trim()) {
-      setFormStatus("error");
+      setFormStatus("contact-required");
       return;
     }
     setFormStatus("sending");
@@ -337,7 +337,7 @@ export default function App() {
             <label aria-hidden="true" style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}>Leave this field empty<input name="website" type="text" tabIndex={-1} autoComplete="off" /></label>
             <div className="form-grid">
               <label>{t.formName}<input name="name" placeholder={language === "en" ? "Your full name" : "आपका पूरा नाम"} required /></label>
-              <label>{t.formEmail}<input name="email" type="email" placeholder="you@example.com" required /></label>
+              <label>{t.formEmail}<input name="email" type="email" placeholder="you@example.com" /></label>
               <label>{t.formPhone}<input name="phone" type="tel" placeholder="+91 ..." /></label>
               <label>{t.formService}<select name="service" defaultValue="" required><option value="" disabled>{t.formChoose}</option>{services.map((item) => <option key={item.id} value={item.id}>{item.title[language]}</option>)}</select></label>
               <label>{t.formDate}<input name="date" type="date" /></label>
@@ -346,6 +346,7 @@ export default function App() {
             </div>
             <button className="button button-gold form-submit" type="submit" disabled={formStatus === "sending"}>{formStatus === "sending" ? t.formSending : t.formSubmit}<Send size={16} /></button>
             {formStatus === "success" && <p className="form-notice" role="status">{t.formNotice}</p>}
+            {formStatus === "contact-required" && <p className="form-notice" role="alert">{t.formRequiredContact}</p>}
             {formStatus === "error" && <p className="form-notice" role="alert">{t.formError}</p>}
           </form>
         </section>
