@@ -241,7 +241,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
   if ((url.pathname === "/api/enquiries" || url.pathname === "/api/v1/enquiries") && request.method === "POST") {
     const contentType = request.headers.get("content-type") ?? "";
-    if (!contentType.toLowerCase().includes("application/json")) {
+    if (contentType.split(";")[0].trim().toLowerCase() !== "application/json") {
       return json({ error: "content_type_must_be_application_json" }, 415);
     }
 
