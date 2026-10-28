@@ -40,3 +40,16 @@ The connected Cloudflare account's `golden-films-db` already contained the Golde
 - Enquiry inserts now use `preferred_date`, and empty strings for email/phone when the alternate contact method is supplied, matching the existing D1 constraints.
 - Direct read-only verification confirmed 14 categories and 0 existing enquiries; no test enquiry was inserted into the database.
 - No Worker deployment was performed. Live endpoint checks still require a deployed Worker.
+
+
+## Enquiry rate limiting (2026-10-28)
+
+- Added `enquiry_rate_limits` D1 table and index in `migrations/0002_enquiry_rate_limits.sql`.
+- Worker computes a SHA-256 digest of Cloudflare's `CF-Connecting-IP`; raw IP addresses are not stored.
+- Limit: 5 enquiry API attempts per client IP per fixed 15-minute window.
+- Returns HTTP 429 with `Retry-After` when the limit is exceeded.
+- Rate-limit storage failure returns 503 (fail-closed) rather than silently bypassing the protection.
+- Old rate-limit rows are opportunistically cleaned up after 48 hours.
+- The new migration was applied successfully to the connected `golden-films-db` database.
+- Postman collection now includes checks for non-JSON content type and cross-origin submission.
+- These changes are not live until the Worker is deployed. Do not run the valid-enquiry test against production because it creates a real enquiry row.
