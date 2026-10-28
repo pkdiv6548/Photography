@@ -6,7 +6,7 @@ A premium cinematic, bilingual (English/Hindi) photography, videography, photo-e
 
 The responsive portfolio UI prototype and Cloudflare Workers API foundation are in the main branch. The UI includes 14 portfolio categories, services, sample-labelled demo imagery, an English/Hindi switcher, and an enquiry form wired to `POST /api/enquiries`.
 
-The API validates enquiry input and is designed to store submissions in D1. It is not deployed, and the repository's Wrangler configuration deliberately retains a placeholder database ID. The public form will not work against a live service until a real D1 binding is intentionally configured and the Worker is deployed. No production deployment was performed.
+The API validates enquiry input and is designed to store submissions in D1. The Wrangler configuration now references the existing `golden-films-db` database confirmed in the connected Cloudflare account; it currently reports zero tables. Migrations have not been run and the Worker is not deployed. The public form will not work against a live service until the database schema is intentionally initialized and the Worker is deployed.
 
 ## Local development
 
@@ -43,6 +43,6 @@ All placeholder/demo media must be clearly labeled as sample content and must no
 ## Current limitations
 
 - Real phone, WhatsApp, email and Instagram details have not been provided.
-- The Worker is not deployed and no production D1 binding is configured in the repository.
+- The Worker is not deployed. The D1 binding is configured, but the target database currently has zero tables and migrations have not been run.
 - Email notifications, Admin authentication, password recovery, email verification, R2 uploads and the production admin UI are not implemented.
 - No paid Cloudflare resource or production deployment is enabled.
