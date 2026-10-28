@@ -59,6 +59,38 @@ function isValidDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+const MAX_ENQUIRY_BODY_BYTES = 16_384;
+
+async function readLimitedBody(request: Request): Promise<{ text?: string; tooLarge?: boolean; invalid?: boolean }> {
+  if (!request.body) return { text: "" };
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_ENQUIRY_BODY_BYTES) {
+        await reader.cancel();
+        return { tooLarge: true };
+      }
+      chunks.push(value);
+    }
+    const combined = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { text: new TextDecoder("utf-8", { fatal: true }).decode(combined) };
+  } catch {
+    return { invalid: true };
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 const RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
 const RATE_LIMIT_MAX_REQUESTS = 5;
 
@@ -194,11 +226,15 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     }
 
     const declaredLength = Number(request.headers.get("content-length") ?? "0");
-    if (declaredLength > 16_384) return json({ error: "request_too_large" }, 413);
+    if (declaredLength > MAX_ENQUIRY_BODY_BYTES) return json({ error: "request_too_large" }, 413);
+
+    const bodyRead = await readLimitedBody(request);
+    if (bodyRead.tooLarge) return json({ error: "request_too_large" }, 413);
+    if (bodyRead.invalid || bodyRead.text === undefined) return json({ error: "invalid_json" }, 400);
 
     let raw: unknown;
     try {
-      raw = await request.json();
+      raw = JSON.parse(bodyRead.text);
     } catch {
       return json({ error: "invalid_json" }, 400);
     }
@@ -211,7 +247,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (cleanText(body.website, 200)) return json({ ok: true, message: "Enquiry received." }, 201);
 
     const input: EnquiryInput = {
-      name: cleanText(body.name, 100),
+      name: cleanText(body.name, 80),
       email: cleanText(body.email, 254).toLowerCase(),
       phone: cleanText(body.phone, 30),
       service: cleanText(body.service, 80),
