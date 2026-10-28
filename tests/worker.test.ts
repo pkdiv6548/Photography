@@ -69,3 +69,23 @@ test("unsupported methods return 405", async () => {
   assert.equal(response.status, 405);
   assert.equal(response.headers.get("Allow"), "GET, POST, OPTIONS");
 });
+
+test("impossible calendar dates are rejected", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Sample visitor",
+        email: "visitor@example.test",
+        service: "wedding-photography",
+        eventDate: "2026-99-99",
+        message: "Please tell me about your photography services.",
+        consent: true
+      })
+    }),
+    emptyEnv
+  );
+  assert.equal(response.status, 400);
+  assert.equal((await response.json() as { error: string }).error, "validation_failed");
+});
