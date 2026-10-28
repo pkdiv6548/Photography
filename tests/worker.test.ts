@@ -427,3 +427,17 @@ test("static asset responses also receive security headers", async () => {
   assert.equal(response.headers.get("Referrer-Policy"), "strict-origin-when-cross-origin");
   assert.equal(response.headers.get("Permissions-Policy"), "camera=(), microphone=(), geolocation=()");
 });
+
+
+test("enquiry endpoint rejects content types that only contain application/json as a substring", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json-malformed" },
+      body: JSON.stringify({ name: "Sample Visitor" })
+    }),
+    emptyEnv
+  );
+  assert.equal(response.status, 415);
+  assert.deepEqual(await response.json(), { error: "content_type_must_be_application_json" });
+});
