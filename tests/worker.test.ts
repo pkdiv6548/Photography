@@ -21,7 +21,7 @@ test("readiness endpoint reports ready only when the expected schema is availabl
   let checkedSchema = "";
   const db = {
     prepare(query: string) {
-      checkedSchema = query;
+      checkedSchema += query;
       return {
         bind(..._args: unknown[]) { return this; },
         async first<T>() { return null as T | null; },
