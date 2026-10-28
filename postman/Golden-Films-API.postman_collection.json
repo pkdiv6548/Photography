@@ -1,0 +1,126 @@
+{
+  "info": {
+    "_postman_id": "dcb70e04-13b2-4261-ba10-49219ab30c6e",
+    "name": "Golden Films API Regression",
+    "description": "Free-tier regression checks for the Golden Films Cloudflare Worker API. Set baseUrl to a local Wrangler dev server or a deployed test environment. The valid enquiry test writes to the configured D1 database; use a test database, not production.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8787",
+      "description": "Local Wrangler dev URL by default; change to a test deployment when ready."
+    }
+  ],
+  "item": [
+    {
+      "name": "Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('health returns 200', () => pm.response.to.have.status(200));",
+              "pm.test('database reports connected', () => pm.expect(pm.response.json().database).to.eql('connected'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Published categories",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/categories"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('categories returns 200', () => pm.response.to.have.status(200));",
+              "pm.test('categories payload is an array', () => pm.expect(pm.response.json().categories).to.be.an('array'));",
+              "pm.test('seeded category count is 14', () => pm.expect(pm.response.json().categories.length).to.eql(14));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Submit valid enquiry (writes to test DB)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Postman Test User\",\n  \"email\": \"postman-test@example.com\",\n  \"phone\": \"\",\n  \"service\": \"photography\",\n  \"eventDate\": \"\",\n  \"budgetRange\": \"undecided\",\n  \"message\": \"Automated regression test enquiry.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/enquiries"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('valid enquiry returns 201', () => pm.response.to.have.status(201));",
+              "pm.test('response confirms receipt', () => pm.expect(pm.response.json().ok).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject enquiry without contact details",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Postman Test User\",\n  \"email\": \"\",\n  \"phone\": \"\",\n  \"service\": \"photography\",\n  \"message\": \"This payload should be rejected.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/enquiries"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('missing contact details returns 400', () => pm.response.to.have.status(400));",
+              "pm.test('validation error is returned', () => pm.expect(pm.response.json().error).to.be.a('string'));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
