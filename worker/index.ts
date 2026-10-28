@@ -240,11 +240,11 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   }
 
   if (request.method === "GET" && path === "/api/v1/categories") {
-    if (!env.DB) return json(request, env, 503, { error: "database_not_configured" });
     const language = url.searchParams.get("lang") || "en";
     if (language !== "en" && language !== "hi") {
       return json(request, env, 400, { error: "invalid_language", supported: ["en", "hi"] });
     }
+    if (!env.DB) return json(request, env, 503, { error: "database_not_configured" });
     const result = await env.DB.prepare(
       "SELECT c.slug, COALESCE(ct.name, en.name) AS name, c.sort_order AS sortOrder " +
       "FROM categories c " +
@@ -256,7 +256,6 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   }
 
   if (request.method === "GET" && path === "/api/v1/projects") {
-    if (!env.DB) return json(request, env, 503, { error: "database_not_configured" });
     const language = url.searchParams.get("lang") || "en";
     if (language !== "en" && language !== "hi") {
       return json(request, env, 400, { error: "invalid_language", supported: ["en", "hi"] });
@@ -270,6 +269,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     if (!Number.isInteger(limit) || limit < 1 || limit > 48) {
       return json(request, env, 400, { error: "invalid_limit", allowed: "1-48" });
     }
+    if (!env.DB) return json(request, env, 503, { error: "database_not_configured" });
     const result = await env.DB.prepare(
       "SELECT p.slug, p.cover_object_key AS coverKey, p.featured, c.slug AS categorySlug, " +
       "COALESCE(pt.title, en.title) AS title, " +
