@@ -59,3 +59,17 @@ The readiness endpoint is expected to reject this schema. This is a deliberate f
 ## Zero-budget guardrail
 
 Keep the project at ₹0. Do not enable paid services, subscriptions, billing, or billable resources without explicit approval. Never commit API tokens, credentials, or secret values.
+
+
+## Read-only schema audit procedure
+
+1. Confirm the Cloudflare account and D1 database name before running any command.
+2. Open `scripts/audit-d1-schema.sql` and execute it in the D1 SQL console against the intended database. The query reads SQLite schema metadata only and does not mutate application rows.
+3. Review every row returned:
+   - `PRESENT`: the required column exists, but its type, constraints, and semantics still need review.
+   - `MISSING`: the Worker contract expects a column that is absent.
+   - `INCOMPATIBLE_NOT_NULL`: phone-only enquiries can fail because the email column rejects SQL NULL.
+4. Save the result as a review artifact without including customer data or secrets. Reconcile each discrepancy with the actual schema and application semantics.
+5. Do not use the audit result alone to authorize a migration. It does not validate all CHECK constraints, foreign keys, indexes, data transformations, or admin/auth dependencies.
+6. Before any write: obtain and verify a backup/export, restore it into a disposable test database, test a forward-only migration and rollback/recovery plan, and run regression tests. Never apply the baseline `CREATE TABLE IF NOT EXISTS` migration expecting it to reshape existing tables.
+7. No live migration or deployment is authorized by this runbook. Keep the project at ₹0 unless explicitly approved otherwise.
