@@ -17,6 +17,44 @@ test("readiness endpoint fails closed when D1 is not configured", async () => {
   assert.deepEqual(await response.json(), { error: "database_not_configured" });
 });
 
+test("readiness endpoint reports ready only when the expected schema is available", async () => {
+  let checkedSchema = "";
+  const db = {
+    prepare(query: string) {
+      checkedSchema = query;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+  const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "ready" });
+  assert.match(checkedSchema, /category_translations/);
+  assert.match(checkedSchema, /cover_object_key/);
+  assert.match(checkedSchema, /e\.consent/);
+  assert.match(checkedSchema, /LIMIT 0/);
+});
+
+test("readiness endpoint rejects a connected database with the legacy schema", async () => {
+  const db = {
+    prepare(_query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { throw new Error("no such table: category_translations"); }
+      };
+    }
+  };
+  const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "database_schema_incompatible" });
+});
+
 test("requests from an unexpected origin are rejected", async () => {
   const response = await worker.fetch(
     new Request("https://example.test/api/health", { headers: { Origin: "https://attacker.example" } }),
