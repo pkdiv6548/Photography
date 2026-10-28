@@ -107,3 +107,16 @@ The current direct database-details response confirmed:
 The current catalog query listed 12 application tables plus Cloudflare's internal `_cf_KV` table and indexes. Read-only queries again reported `rows_written: 0` and `changed_db: false`. The previously captured zero-row counts for projects, enquiries, media, translations, and admin/auth tables remain point-in-time only and must be refreshed before any migration.
 
 This inventory does not constitute a backup, restore test, migration test, or authorization to write to the live database.
+
+
+## Latest export and catalog recheck (2026-10-28)
+
+A supported Cloudflare D1 SQL export was started and polled to completion for the configured database. Cloudflare returned `status: complete` and a generated SQL filename. The signed download URL is short-lived and is intentionally not recorded in this repository because it grants access to the database dump.
+
+**Verification status: incomplete.** The SQL file has not yet been downloaded and independently inspected, and no disposable-database restore has been verified. Treat the export as generated, not as a verified recovery backup, until file integrity, schema, row counts, and isolated restore are checked.
+
+A fresh read-only catalog query returned 12 application tables plus Cloudflare's internal `_cf_KV` table, and 6 non-internal indexes. Read-only counts reconfirmed: `categories` = 14, `projects` = 0, `enquiries` = 0, `project_media` = 0, and `project_translations` = 0. All successful queries reported `rows_written: 0` and `changed_db: false`.
+
+The target table `category_translations` is still absent from the live legacy schema. This reinforces that the baseline migration must not be applied unchanged. These counts are point-in-time observations only; rerun the audit immediately before any approved write.
+
+No production migration, import, or schema write was performed. Continue to block migration until the export file is verified and restored successfully in a disposable environment, and all documented mapping blockers are resolved.
