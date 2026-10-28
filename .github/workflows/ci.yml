@@ -2,9 +2,9 @@ name: Website checks
 
 on:
   pull_request:
-    branches: [main, chore/project-foundation]
-  push:
     branches: [main, chore/project-foundation, feat/premium-portfolio]
+  push:
+    branches: [main, chore/project-foundation, feat/premium-portfolio, feat/d1-enquiry-api]
 
 permissions:
   contents: read
@@ -21,7 +21,9 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Type-check
+      - name: Type-check frontend
         run: npm run typecheck
+      - name: Type-check Worker API
+        run: npm run typecheck:worker
       - name: Build production assets
         run: npm run build
