@@ -220,8 +220,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       message: cleanText(body.message, 3000),
     };
     const allowedServices = new Set([
-      "wedding-photography", "pre-wedding", "portrait-fashion", "event-coverage",
-      "product-commercial", "cinematic-video", "photo-editing", "video-editing", "other"
+      "photography", "videography", "photo-editing", "video-editing"
     ]);
     const consent = body.consent === true;
     const validPhone = !input.phone || /^[+()\d .-]{7,30}$/.test(input.phone);
