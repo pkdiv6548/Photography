@@ -194,8 +194,8 @@ export default function App() {
         </button>
         <nav className={`main-nav ${menuOpen ? "is-open" : ""}`} aria-label="Main navigation">
           {t.nav.map((label, index) => {
-            const targets = ["home", "categories", "services", "about", "showreel", "contact"];
-            return <a key={targets[index]} href={`#${targets[index]}`} onClick={() => setMenuOpen(false)}>{label}</a>;
+            const routes = ["/", "/portfolio", "/services", "/about", "/showreel", "/contact"];
+            return <a key={routes[index]} href={routes[index]} onClick={() => setMenuOpen(false)}>{label}</a>;
           })}
         </nav>
         <div className="header-actions">
