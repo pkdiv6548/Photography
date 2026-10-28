@@ -293,6 +293,29 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       consent;
     if (!valid) return json({ error: "validation_failed" }, 400);
 
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+
+    // Fail closed before the rate limiter performs any writes: the configured live D1
+    // database has a legacy schema, and this Worker must not partially operate against it.
+    try {
+      await env.DB?.prepare(
+        `SELECT c.is_published, ct.category_id, ct.language, ct.name,
+          p.category_id, p.cover_object_key, p.featured, p.event_date, p.updated_at,
+          e.email, e.event_date, e.consent, rl.ip_hash, rl.window_start, rl.request_count
+         FROM categories c
+         LEFT JOIN category_translations ct ON ct.category_id = c.id
+         LEFT JOIN projects p ON p.category_id = c.id
+         LEFT JOIN enquiries e ON 1 = 0
+         LEFT JOIN enquiry_rate_limits rl ON 1 = 0
+         LIMIT 0`
+      ).all();
+      const columns = await env.DB?.prepare("PRAGMA table_info(enquiries)").all<{ name: string; notnull: number }>();
+      const emailColumn = (columns?.results ?? []).find((column) => column.name === "email");
+      if (!emailColumn || emailColumn.notnull !== 0) throw new Error("incompatible enquiries schema");
+    } catch {
+      return json({ error: "database_schema_incompatible" }, 503);
+    }
+
     const rateLimitResponse = await enforceEnquiryRateLimit(request, env);
     if (rateLimitResponse) return rateLimitResponse;
     if (!env.DB) return json({ error: "database_not_configured" }, 503);

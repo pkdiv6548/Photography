@@ -248,6 +248,9 @@ test("enquiry rate limit returns 429 and does not store the sixth request", asyn
           return { success: true, meta: { changes: 1 } };
         },
         async all<T>() {
+          if (query.includes("PRAGMA table_info(enquiries)")) {
+            return { success: true, results: [{ name: "email", notnull: 0 }] as T[] };
+          }
           return { success: true, results: [] as T[] };
         }
       };
@@ -274,6 +277,9 @@ test("enquiry rate limit returns 429 and does not store the sixth request", asyn
 
 test("phone-only enquiry is stored with a NULL email when D1 is available", async () => {
   let storedEnquiryValues: unknown[] | undefined;
+  const schemaColumns = [
+    { name: "email", notnull: 0 }
+  ];
   const db = {
     prepare(query: string) {
       let values: unknown[] = [];
@@ -293,6 +299,7 @@ test("phone-only enquiry is stored with a NULL email when D1 is available", asyn
           return { success: true, meta: { changes: 1 } };
         },
         async all<T>() {
+          if (query.includes("PRAGMA table_info(enquiries)")) return { success: true, results: schemaColumns as T[] };
           return { success: true, results: [] as T[] };
         }
       };
