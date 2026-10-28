@@ -6,7 +6,7 @@ A premium cinematic, bilingual (English/Hindi) photography, videography, photo-e
 
 The responsive portfolio UI prototype and Cloudflare Workers API foundation are in the main branch. The UI includes 14 portfolio categories, services, sample-labelled demo imagery, an English/Hindi switcher, and an enquiry form wired to `POST /api/enquiries`.
 
-The API validates enquiry input and is designed to store submissions in D1. The Wrangler configuration references the existing `golden-films-db` database in the connected Cloudflare account. A read-only inspection on 2026-10-28 found a pre-existing/legacy schema (including 14 category rows and tables such as `project_media`, `admin_users`, and `site_settings`) whose column names and constraints do not match the current `migrations/0001_initial_schema.sql` and Worker queries. Cloudflare's database metadata also reported `num_tables: 0`, which conflicts with the SQL catalog; treat the SQL catalog as the direct schema evidence. Do not apply the current baseline migration to this database until schema ownership, migration history, and a compatibility plan have been reviewed. No data was written during inspection. The Worker is not deployed.
+The API validates enquiry input and is designed to store submissions in D1. The Wrangler configuration references the existing `golden-films-db` database in the connected Cloudflare account. A read-only inspection on 2026-10-28 found a pre-existing/legacy schema (including 14 category rows and tables such as `project_media`, `admin_users`, and `site_settings`) whose column names and constraints do not match the current `migrations/0001_initial_schema.sql` and Worker queries. The latest direct database-details response reports `num_tables: 12`, matching the 12 application tables in the SQL catalog when Cloudflare's internal `_cf_KV` table is excluded; an earlier metadata response reported zero, so that discrepancy remains documented for preflight. The SQL catalog is the current direct schema evidence. Do not apply the current baseline migration to this database until schema ownership, migration history, a verified export/restore, and a compatibility plan have been reviewed. The export request completed, but the SQL file has not yet been downloaded and restore-verified. No data was written during inspection. The Worker is not deployed.
 
 ## Local development
 
@@ -43,6 +43,6 @@ All placeholder/demo media must be clearly labeled as sample content and must no
 ## Current limitations
 
 - Real phone, WhatsApp, email and Instagram details have not been provided.
-- The Worker is not deployed. The D1 binding is configured. The existing D1 database has a legacy schema mismatch; current migrations must not be applied to it until a safe forward-migration plan is reviewed.
+- The Worker is not deployed. The D1 binding is configured. The existing D1 database has a legacy schema mismatch; current migrations must not be applied to it until a safe forward-migration plan is reviewed and the export has been restored successfully in a disposable environment.
 - Email notifications, Admin authentication, password recovery, email verification, R2 uploads and the production admin UI are not implemented.
 - No paid Cloudflare resource or production deployment is enabled.
