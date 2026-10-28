@@ -8,22 +8,22 @@ This is a scaffold for the Cloudflare Workers API. It is not deployed and is not
 | --- | --- | --- |
 | GET | /api/health | Liveness response; does not prove D1 is available |
 | GET | /api/ready | Readiness check; requires the D1 binding |
-| GET | /api/v1/categories?lang=en or hi | Published categories with language fallback |
-| GET | /api/v1/projects?lang=en or hi&category=slug&limit=24 | Published projects only, optionally filtered |
+| GET | /api/v1/categories?lang=en or hi | Published categories, returning English and Hindi labels |
+| GET | /api/v1/projects?category=slug&limit=24 | Published projects only, optionally filtered |
 | POST | /api/v1/enquiries | Validate and save an enquiry to D1 |
 
 ## Enquiry JSON
 
-Required keys: name, email, service, message and consent=true. Optional keys: phone, eventDate in YYYY-MM-DD format, and budgetRange. The service key must be one of the canonical values: wedding-photography, pre-wedding, portrait-fashion, event-coverage, product-commercial, cinematic-video, photo-editing, video-editing or other.
+Required keys: name, service, message and consent=true; provide at least one of email or phone. Optional keys: eventDate in YYYY-MM-DD format and budgetRange. The service key must be one of the UI's canonical values: `photography`, `videography`, `photo-editing`, or `video-editing`.
 
-The server caps request bodies at 16 KiB, validates the input, stores the record before returning success, and applies a database-backed limit of five valid submissions per client-IP per minute. Client IPs are HMAC-hashed with RATE_LIMIT_SECRET and are not stored as plain IP addresses. If D1 or the rate-limit secret is not configured, the endpoint fails closed instead of accepting unprotected submissions.
+The server rejects non-JSON requests, caps declared request bodies at 16 KiB, validates fields and dates, and stores the enquiry before returning success. It applies a database-backed limit of five valid submissions per client IP per 15-minute window. The client IP is represented in the rate-limit table by a SHA-256 digest; the raw IP is not stored. The current implementation does not use a `RATE_LIMIT_SECRET`; this digest is not a keyed HMAC and should not be described as one.
 
 ## Setup status
 
-- No Cloudflare resources were created by this change.
-- Copy wrangler.toml.example to wrangler.toml only after confirming the account stays on free usage and you intentionally create a D1 database.
-- Replace the sample database ID with the real ID returned by Cloudflare. Never commit account IDs, API tokens, or secret values.
-- Configure RATE_LIMIT_SECRET using Wrangler's secret command; do not add it to the repository or commit a local environment file.
+- The Wrangler configuration points to an existing D1 database that was confirmed in the connected account, but the database currently has zero tables. Migrations have not been run.
+- Apply migrations only after reviewing the target account and confirming the database is intended for this project.
+- Never commit API tokens or secret values.
 - The API stores enquiries but does not send email notifications. Email delivery remains deferred until a genuinely free and suitable provider is verified.
 - R2 uploads, admin authentication, password recovery, email verification and the actual admin UI are not implemented in this milestone.
 - Production edge/WAF rate limiting is a separate deployment configuration and must be checked against the chosen account plan. The database-backed limiter is the application-level baseline, not a replacement for Cloudflare edge controls.
+- Keep the project at ₹0: do not enable paid plans, subscriptions, billing, or billable resources without explicit approval.

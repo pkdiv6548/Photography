@@ -68,12 +68,6 @@ CREATE TABLE IF NOT EXISTS enquiries (
   updated_at TEXT
 );
 
-CREATE TABLE IF NOT EXISTS api_rate_limits (
-  ip_hash TEXT NOT NULL,
-  window_start INTEGER NOT NULL,
-  request_count INTEGER NOT NULL DEFAULT 1 CHECK (request_count > 0),
-  PRIMARY KEY (ip_hash, window_start)
-);
 
 CREATE INDEX IF NOT EXISTS idx_projects_public_order
   ON projects(status, featured DESC, sort_order, created_at DESC);
@@ -83,8 +77,6 @@ CREATE INDEX IF NOT EXISTS idx_media_project_order
   ON media(project_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_enquiries_status_created
   ON enquiries(status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_rate_limits_window
-  ON api_rate_limits(window_start);
 
 INSERT OR IGNORE INTO categories (id, slug, sort_order, is_published) VALUES
   ('wedding-photography', 'wedding-photography', 1, 1),

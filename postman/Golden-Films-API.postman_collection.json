@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "dcb70e04-13b2-4261-ba10-49219ab30c6e",
     "name": "Golden Films API Regression",
-    "description": "Free-tier regression checks for the Golden Films Cloudflare Worker API. Set baseUrl to a local Wrangler dev server or a deployed test environment. The valid enquiry test writes to the configured D1 database; use a test database, not production. Includes request validation and rate-limit related regression checks; live throttling requires a deployed Worker and repeated requests from one client IP.",
+    "description": "Regression checks for the Golden Films Cloudflare Worker API. Set baseUrl to a local Wrangler dev server or test deployment. The valid enquiry test writes to the configured D1 database; use a test database, not production.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -27,7 +27,7 @@
             "type": "text/javascript",
             "exec": [
               "pm.test('health returns 200', () => pm.response.to.have.status(200));",
-              "pm.test('database reports connected', () => pm.expect(pm.response.json().database).to.eql('connected'));"
+              "pm.test('health payload identifies service', () => pm.expect(pm.response.json().service).to.eql('golden-films-api'));"
             ]
           }
         }
@@ -66,7 +66,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"Postman Test User\",\n  \"email\": \"postman-test@example.com\",\n  \"phone\": \"\",\n  \"service\": \"photography\",\n  \"eventDate\": \"\",\n  \"budgetRange\": \"undecided\",\n  \"message\": \"Automated regression test enquiry.\"\n}",
+          "raw": "{\n  \"name\": \"Postman Test User\",\n  \"email\": \"postman-test@example.com\",\n  \"phone\": \"\",\n  \"service\": \"photography\",\n  \"eventDate\": \"\",\n  \"budgetRange\": \"undecided\",\n  \"message\": \"Automated regression test enquiry.\",\n  \"consent\": true\n}",
           "options": {
             "raw": {
               "language": "json"
