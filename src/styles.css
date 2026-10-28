@@ -188,6 +188,8 @@ img { display: block; max-width: 100%; }
 .form-grid textarea { resize: vertical; }
 .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus { border-color: #957744; outline-offset: 1px; }
 .form-full { grid-column: 1 / -1; }
+.consent-check { display: flex !important; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: 10px !important; color: #c5c7c7; font-size: 10px; line-height: 1.7; cursor: pointer; }
+.consent-check input { width: 16px; height: 16px; margin: 2px 0 0; padding: 0; accent-color: var(--gold); }
 .form-submit { width: 100%; margin-top: 17px; }
 .form-notice { margin: 14px 0 0; padding: 11px; color: #e7cf9e; background: rgba(217,173,99,.08); border: 1px solid var(--line); font-size: 10px; line-height: 1.7; }
 .site-footer { display: grid; grid-template-columns: 1.5fr repeat(3, minmax(0, .8fr)); gap: 30px; padding-top: 48px; padding-bottom: 23px; border-top: 1px solid var(--line); }
