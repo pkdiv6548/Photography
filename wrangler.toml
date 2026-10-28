@@ -1,0 +1,17 @@
+name = "golden-films"
+main = "worker/index.ts"
+compatibility_date = "2026-10-28"
+
+# Build the frontend with `npm run build` before deploying.
+# Do not run `wrangler deploy` until the D1 database_id below is confirmed.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "golden-films-db"
+# Replace with the real database ID from the Cloudflare dashboard before deploy.
+database_id = "REPLACE_WITH_REAL_D1_DATABASE_ID"
+migrations_dir = "migrations"
