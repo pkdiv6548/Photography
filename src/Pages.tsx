@@ -773,16 +773,57 @@ function AdminDashboardPage() {
   </SiteFrame>;
 }
 
-export default function Pages() {
-  const path = window.location.pathname.replace(/\/$/, "") || "/";
-  if (path === "/portfolio") return <SiteFrame eyebrow="SELECTED STORIES" title="Portfolio">
-    <p className="section-subtitle">Browse the portfolio categories. Current images are labelled demo content until real project media is supplied.</p>
-    <div className="category-grid">{categories.map((item) => <article className="category-card" key={item.id}>
+type PublicProject = {
+  id: string; slug: string; category_slug: string; cover_image_url: string; status: string; is_featured: number;
+  location: string | null; project_date: string | null; title_en?: string; title_hi?: string;
+  description_en?: string; description_hi?: string;
+};
+type PublicProjectMedia = { id: string; project_id: string; media_type: string; preview_url: string; alt_en: string; alt_hi: string; sort_order: number };
+
+function PortfolioPageContent() {
+  const [liveProjects, setLiveProjects] = useState<PublicProject[]>([]);
+  const [liveMedia, setLiveMedia] = useState<PublicProjectMedia[]>([]);
+  const [filter, setFilter] = useState("all");
+  useEffect(() => {
+    let active = true;
+    fetch("/api/projects?limit=48", { cache: "no-store" })
+      .then(async response => response.ok ? response.json() as Promise<{ projects?: PublicProject[]; media?: PublicProjectMedia[] }> : null)
+      .then(data => {
+        if (!active || !data) return;
+        setLiveProjects(data.projects ?? []);
+        setLiveMedia(data.media ?? []);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  const visibleProjects = filter === "all" ? liveProjects : liveProjects.filter(project => project.category_slug === filter);
+  return <SiteFrame eyebrow="SELECTED STORIES" title="Portfolio">
+    <p className="section-subtitle">Browse portfolio categories and published projects. Sample cards remain labelled demo content until replaced by approved work.</p>
+    <div className="category-grid">{categories.map(item => <article className="category-card" key={item.id}>
       <a className="category-image" href="/contact"><img src={item.image} alt={item.imageAlt.en} loading="lazy" /><span className="demo-tag">DEMO</span></a>
       <div className="category-card-copy"><h3>{item.title.en}</h3><p>{item.group}</p></div>
     </article>)}</div>
-    <h2 style={{ marginTop: 48 }}>Featured projects</h2><div className="featured-grid">{projects.filter(p => p.featured).map(p => <article className="project-card" key={p.id}><div className="project-image"><img src={p.image} alt={p.imageAlt.en} loading="lazy" /><span className="demo-tag">DEMO</span></div><div className="project-card-copy"><h3>{p.title.en}</h3><p>{p.category.en}</p></div></article>)}</div>
+    {liveProjects.length > 0 ? <>
+      <h2 style={{ marginTop: 48 }}>Published projects</h2>
+      <div className="filter-row" style={{ marginTop: 16 }}>
+        <button type="button" className={"filter-chip" + (filter === "all" ? " active" : "")} onClick={() => setFilter("all")}>All projects</button>
+        {Array.from(new Set(liveProjects.map(project => project.category_slug))).map(slug => <button key={slug} type="button" className={"filter-chip" + (filter === slug ? " active" : "")} onClick={() => setFilter(slug)}>{categories.find(category => category.id === slug || category.id === slug.replace(/-/g, ""))?.title.en || slug.replaceAll("-", " ")}</button>)}
+      </div>
+      <div className="featured-grid">{visibleProjects.map(project => <article className="project-card" key={project.id}>
+        <div className="project-image"><img src={project.cover_image_url} alt={project.title_en || project.slug} loading="lazy" /></div>
+        <div className="project-card-copy"><h3>{project.title_en || project.slug}</h3><p>{project.category_slug.replaceAll("-", " ")}{project.location ? " · " + project.location : ""}</p>{project.description_en && <p className="section-subtitle">{project.description_en}</p>}
+          {liveMedia.filter(item => item.project_id === project.id).map(item => item.media_type === "image"
+            ? <a key={item.id} className="category-image" href={item.preview_url} target="_blank" rel="noopener noreferrer" style={{ marginTop: 10 }}><img src={item.preview_url} alt={item.alt_en || project.title_en || project.slug} loading="lazy" /></a>
+            : <p key={item.id} style={{ marginTop: 10 }}><a className="text-link" href={item.preview_url} target="_blank" rel="noopener noreferrer">Watch video <ArrowRight size={15}/></a></p>)}
+        </div>
+      </article>)}</div>
+    </> : <><h2 style={{ marginTop: 48 }}>Featured projects</h2><div className="featured-grid">{projects.filter(p => p.featured).map(p => <article className="project-card" key={p.id}><div className="project-image"><img src={p.image} alt={p.imageAlt.en} loading="lazy" /><span className="demo-tag">DEMO</span></div><div className="project-card-copy"><h3>{p.title.en}</h3><p>{p.category.en}</p></div></article>)}</div></>}
   </SiteFrame>;
+}
+
+export default function Pages() {
+  const path = window.location.pathname.replace(/\/$/, "") || "/";
+  if (path === "/portfolio") return <PortfolioPageContent />;
   if (path === "/services") return <ServicesContentPage />;
   if (path === "/about") return <AboutContentPage />;
   if (path === "/showreel") return <ShowreelContentPage />;
