@@ -36,8 +36,9 @@ test("migration verifier checks additive consent, role and CMS schema without wr
 });
 
 test("schema audit matches live table and column names", () => {
+  assert.match(audit, /pragma_table_info\(e\.table_name\)/i);
   for (const table of ["categories", "projects", "project_translations", "project_media", "enquiries", "enquiry_rate_limits", "admin_users", "admin_sessions", "admin_setup", "auth_rate_limits", "audit_logs", "site_content", "site_content_revisions"]) {
-    assert.match(audit, new RegExp(`pragma_table_info\\('${table}'\\)`, "i"), `missing live schema table ${table}`);
+    assert.match(audit, new RegExp(`\\["${table}","`, "i"), `missing live schema table ${table}`);
   }
   assert.match(audit, /\["enquiries","email",1\]/i);
   assert.match(audit, /INCOMPATIBLE_NOT_NULL/i);
