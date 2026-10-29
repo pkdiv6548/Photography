@@ -2,7 +2,9 @@
 """Exercise the candidate forward migration against a disposable SQLite fixture.
 
 This is a schema/logic regression test, NOT a substitute for restoring and testing
-an actual Cloudflare D1 export before any production migration.
+an actual Cloudflare D1 export before any production migration. The audit_logs
+definition below reflects the read-only live catalog inspection performed
+2026-10-29; other fixture definitions remain a minimal compatibility fixture.
 """
 from pathlib import Path
 import sqlite3
@@ -39,7 +41,7 @@ CREATE TABLE project_translations (
 CREATE TABLE project_media (
   id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   media_type TEXT NOT NULL, preview_url TEXT NOT NULL DEFAULT '',
-  original_key TEXT NOT NULL DEFAULT '', alt_en TEXT NOT NULL DEFAULT '',
+  original_key TEXT, alt_en TEXT NOT NULL DEFAULT '',
   alt_hi TEXT NOT NULL DEFAULT '', sort_order INTEGER NOT NULL DEFAULT 0,
   is_public INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -64,9 +66,14 @@ CREATE TABLE admin_sessions (
   token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Matches the live catalog definition: no actor_id/details_json; target fields
+-- are NOT NULL with empty-string defaults, and admin_user_id references admin_users.
 CREATE TABLE audit_logs (
-  id TEXT PRIMARY KEY, actor_id TEXT, action TEXT NOT NULL,
-  target_type TEXT, target_id TEXT, details_json TEXT NOT NULL DEFAULT '{}',
+  id TEXT PRIMARY KEY,
+  admin_user_id TEXT REFERENCES admin_users(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  target_type TEXT NOT NULL DEFAULT '',
+  target_id TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
@@ -83,7 +90,7 @@ PRESERVATION_QUERIES = {
     "enquiries": "SELECT id, name, email, phone, service, preferred_date, budget_range, message, status, created_at, updated_at FROM enquiries ORDER BY id",
     "admin_users": "SELECT id, email, password_hash, password_salt, email_verified_at, is_active, created_at, last_login_at FROM admin_users ORDER BY id",
     "admin_sessions": "SELECT id, admin_user_id, token_hash, expires_at, created_at FROM admin_sessions ORDER BY id",
-    "audit_logs": "SELECT id, actor_id, action, target_type, target_id, details_json, created_at FROM audit_logs ORDER BY id",
+    "audit_logs": "SELECT id, admin_user_id, action, target_type, target_id, created_at FROM audit_logs ORDER BY id",
 }
 
 
@@ -110,8 +117,8 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
           VALUES ('admin-1', 'owner@example.test', 'hash-placeholder', 'salt-placeholder', '2026-01-01', '2026-10-28');
           INSERT INTO admin_sessions (id, admin_user_id, token_hash, expires_at)
           VALUES ('session-1', 'admin-1', 'token-hash-placeholder', '2999-01-01 00:00:00');
-          INSERT INTO audit_logs (id, actor_id, action, target_type, target_id, details_json)
-          VALUES ('audit-1', 'admin-1', 'fixture', 'project', 'project-1', '{"kept":true}');
+          INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id)
+          VALUES ('audit-1', 'admin-1', 'fixture', 'project', 'project-1');
         """)
         self.db.commit()
 
@@ -161,6 +168,19 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
             )
         }
         self.assertTrue({"site_content", "site_content_revisions"}.issubset(table_names))
+
+        # Worker audit inserts omit target fields for some event types; the live
+        # schema defaults must permit those inserts without requiring extra fields.
+        self.db.execute(
+            "INSERT INTO audit_logs (id, admin_user_id, action) VALUES (?, ?, ?)",
+            ("audit-defaults", "admin-1", "login_failed"),
+        )
+        self.assertEqual(
+            tuple(self.db.execute(
+                "SELECT target_type, target_id FROM audit_logs WHERE id='audit-defaults'"
+            ).fetchone()),
+            ("", ""),
+        )
 
         self.db.execute("""
           INSERT INTO enquiries (id, name, email, phone, service, message, consent)
