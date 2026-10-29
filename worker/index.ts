@@ -369,6 +369,23 @@ async function supportedEnquiryStatuses(db: D1Binding): Promise<string[]> {
 }
 
 
+
+async function hasValidMediaSignature(file: File): Promise<boolean> {
+  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const starts = (signature: number[]) => signature.every((value, index) => bytes[index] === value);
+  const asciiAt = (text: string, offset: number) =>
+    text.split("").every((character, index) => bytes[offset + index] === character.charCodeAt(0));
+  switch (file.type.toLowerCase()) {
+    case "image/jpeg": return starts([0xff, 0xd8, 0xff]);
+    case "image/png": return starts([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    case "image/gif": return asciiAt("GIF87a", 0) || asciiAt("GIF89a", 0);
+    case "image/webp": return asciiAt("RIFF", 0) && asciiAt("WEBP", 8);
+    case "video/mp4": return asciiAt("ftyp", 4);
+    case "video/webm": return starts([0x1a, 0x45, 0xdf, 0xa3]);
+    default: return false;
+  }
+}
+
 function isSafeExternalMediaUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -946,6 +963,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const extension = mimeExtensions[file.type.toLowerCase()];
     if (!extension) return json({ error: "unsupported_media_type", allowed: Object.keys(mimeExtensions) }, 415);
     const mediaType = file.type.startsWith("video/") ? "video" : "image";
+    if (!await hasValidMediaSignature(file)) return json({ error: "file_signature_mismatch" }, 415);
     try {
       const project = await env.DB.prepare("SELECT id, status FROM projects WHERE id = ?").bind(projectId).first<{ id: string; status: string }>();
       if (!project) return json({ error: "project_not_found" }, 404);
