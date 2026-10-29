@@ -116,6 +116,65 @@ const homeContentFields = [
   { key: "contactTextHi", label: "Contact description · Hindi", max: 500, multiline: true },
 ] as const;
 
+type ContentRevision = { id: string; page_slug: string; revision_status: string; created_at: string };
+
+function AdminContentRevisionHistory({ page, onRestored }: {
+  page: string;
+  onRestored: (content: Record<string, string>) => void;
+}) {
+  const [revisions, setRevisions] = useState<ContentRevision[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState("");
+  const [message, setMessage] = useState("");
+
+  const loadRevisions = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/content/revisions?page=" + encodeURIComponent(page), {
+        credentials: "same-origin", cache: "no-store"
+      });
+      if (response.status === 401) { window.location.replace("/login"); return; }
+      if (!response.ok) throw new Error("revision_history_unavailable");
+      const data = await response.json() as { revisions?: ContentRevision[] };
+      setRevisions(data.revisions ?? []);
+    } catch {
+      setMessage("Revision history is unavailable until the CMS database migration is applied.");
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { void loadRevisions(); }, [page]);
+
+  const restore = async (revision: ContentRevision) => {
+    if (busyId || !window.confirm("Restore this revision as a draft? The currently published content will not change until you publish.")) return;
+    setBusyId(revision.id);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/content/restore", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ revisionId: revision.id })
+      });
+      const data = await response.json() as { content?: Record<string, string> };
+      if (!response.ok || !data.content) throw new Error("restore_failed");
+      onRestored(data.content);
+      setMessage("Revision restored as a draft. Review it before publishing.");
+      await loadRevisions();
+    } catch { setMessage("Could not restore this revision."); }
+    finally { setBusyId(""); }
+  };
+
+  return <div style={{ marginTop: 24 }}>
+    <h3>Revision history · {page}</h3>
+    {loading && <p className="section-subtitle">Loading revisions…</p>}
+    {!loading && revisions.length === 0 && <p className="section-subtitle">No saved revisions yet.</p>}
+    {revisions.map(revision => <div key={revision.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 0", borderTop: "1px solid #333" }}>
+      <div><strong>{revision.revision_status}</strong><p className="section-subtitle">{revision.created_at}</p></div>
+      <button className="button button-outline" type="button" disabled={Boolean(busyId)} onClick={() => void restore(revision)}>{busyId === revision.id ? "Restoring…" : "Restore as draft"}</button>
+    </div>)}
+    {message && <p role="status" className="form-notice">{message}</p>}
+  </div>;
+}
+
 function AdminHomeContentEditor() {
   const [values, setValues] = useState<Record<string, string>>(defaultHomeContent);
   const [loading, setLoading] = useState(true);
@@ -218,6 +277,12 @@ function AdminHomeContentEditor() {
         <button className="button button-gold" type="button" disabled={!saved || saving} onClick={publish}>{saving ? "Working…" : "Publish homepage"}</button>
       </div>
     </form>}
+    <AdminContentRevisionHistory page="home" onRestored={content => {
+      const merged = { ...defaultHomeContent, ...content };
+      setValues(merged);
+      setSaved(true);
+      setMessage("Revision restored as a draft. Review it before publishing.");
+    }} />
   </section>;
 }
 
@@ -342,6 +407,12 @@ function AdminSecondaryContentEditor() {
         <button className="button button-gold" type="button" disabled={!saved || saving} onClick={publish}>{saving ? "Working…" : "Publish page"}</button>
       </div>
     </form>}
+    <AdminContentRevisionHistory page={page} onRestored={content => {
+      const merged = { ...defaultSecondaryContent[page], ...content };
+      setValues(merged);
+      setSaved(true);
+      setMessage("Revision restored as a draft. Review it before publishing.");
+    }} />
   </section>;
 }
 
