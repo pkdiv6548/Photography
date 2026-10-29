@@ -366,6 +366,7 @@ const CONTENT_FIELDS: Record<string, Record<string, number>> = {
 };
 
 function validatePageContent(page: string, raw: unknown): Record<string, string> | null {
+  if (!Object.prototype.hasOwnProperty.call(CONTENT_FIELDS, page)) return null;
   const fields = CONTENT_FIELDS[page];
   if (!fields || !raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const input = raw as Record<string, unknown>;
@@ -393,12 +394,12 @@ async function handleContentApi(request: Request, env: Env, url: URL): Promise<R
   if (path === "/api/content" && request.method === "GET") {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     const page = url.searchParams.get("page") ?? "home";
-    if (!(page in CONTENT_FIELDS)) return json({ error: "invalid_page" }, 400);
+    if (!Object.prototype.hasOwnProperty.call(CONTENT_FIELDS, page)) return json({ error: "invalid_page" }, 400);
     try {
       const row = await env.DB.prepare(
         "SELECT published_json, status FROM site_content WHERE page_slug = ?"
       ).bind(page).first<{ published_json: string; status: string }>();
-      if (!row || row.status !== "published") return json({ page, content: {} });
+      if (!row || !row.published_json || row.published_json === "{}") return json({ page, content: {} });
       const content: unknown = JSON.parse(row.published_json);
       return json({ page, content: content && typeof content === "object" && !Array.isArray(content) ? content : {} });
     } catch {
@@ -451,7 +452,7 @@ async function handleContentApi(request: Request, env: Env, url: URL): Promise<R
     if (!admin) return json({ error: "unauthorized" }, 401);
     const body = await readAdminJson(request);
     const page = cleanText(body?.page, 20);
-    if (!(page in CONTENT_FIELDS)) return json({ error: "invalid_page" }, 400);
+    if (!Object.prototype.hasOwnProperty.call(CONTENT_FIELDS, page)) return json({ error: "invalid_page" }, 400);
     try {
       const result = await env.DB.prepare(
         "UPDATE site_content SET published_json = draft_json, status = 'published', published_at = datetime('now'), updated_at = datetime('now'), updated_by = ? WHERE page_slug = ?"
