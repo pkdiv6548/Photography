@@ -2,7 +2,7 @@
 
 ## Scope and safety
 
-This snapshot is based on read-only Cloudflare D1 catalog queries against `golden-films-db` (database ID `0241231b-6e6c-410b-a5ac-958eeb424a78`). Queries inspected schema definitions only; no application records were read or changed. The latest catalog inspection returned `changed_db=false` and `rows_written=0`. No export was started and no migration was applied.
+This snapshot is based on read-only Cloudflare D1 catalog queries against `golden-films-db` (database ID `0241231b-6e6c-410b-a5ac-958eeb424a78`). Schema queries inspected catalog definitions only. A later readiness preflight ran aggregate counts for `admin_users` and `admin_setup` but did not return individual user/setup records. No application record contents were retrieved or changed. All direct D1 queries reported `changed_db=false` and `rows_written=0`. No export was started and no migration was applied.
 
 The Cloudflare Pages project is `golden-films`, with `main` as the production branch. The static-site deployment is separate from API readiness. PR #63 contains the draft Pages API bridge; do not merge it until the database restore/migration gate and Pages bindings are verified.
 
@@ -35,6 +35,15 @@ The current Worker readiness contract requires these pieces, which are absent fr
 Also, `enquiries.email` is currently `NOT NULL`, while the API supports phone-only enquiries. The candidate forward migration at `docs/forward-migrations/2026-10-29-live-schema-forward.sql` rebuilds `enquiries`, copies existing records, allows `email` to be nullable, and assigns historical records `consent=0`. It also adds the `role` column and CMS tables. This is a candidate migration only; it has not been run against production and is not approved until isolated restore testing succeeds.
 
 The live schema uses the slug-based category/project/media model (`categories.title_en/title_hi`, `projects.category_slug`, `project_media`). Do not use older audit assumptions expecting `category_translations`, `projects.category_id`, or a separate media table.
+
+## Initial admin setup preflight
+
+A read-only aggregate query on 2026-10-29 returned:
+
+- `admin_users`: 0 total admin users.
+- `admin_setup`: 1 setup row, with 0 rows marked completed.
+
+No email addresses, password hashes, session tokens, or individual setup records were retrieved. This suggests the initial owner-setup flow has not been completed in the current database. The existing setup row satisfies the Worker setup handler's prerequisite, but the flow must not be enabled until the forward migration is verified, Pages binding `DB` is configured, and `ADMIN_SETUP_SECRET` is securely set. Recheck these aggregate counts immediately before any future setup action because they can change.
 
 ## Why the baseline migrations must not be applied to the live database
 
@@ -77,6 +86,7 @@ This inspection confirms the table definition only. No audit-log row contents we
 - Read-only live schema inspection: complete; no writes performed.
 - Exact live `audit_logs` column definitions: verified read-only on 2026-10-29.
 - Migration ledger: no `d1_migrations` table found in the live catalog; historical/manual migration status remains unknown.
+- Admin setup preflight: 0 admins and one incomplete setup row at the time of the aggregate query; recheck before setup.
 - Candidate forward migration: handles nullable email, historical consent default, admin role, and CMS tables, but remains unverified against a real restored export.
 - Full backup/export downloaded and restore-verified: not complete.
 - Disposable restore plus exact migration/test suite: not complete.
