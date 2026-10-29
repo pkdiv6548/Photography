@@ -2,9 +2,9 @@
 
 ## Scope and safety
 
-This snapshot is based on read-only Cloudflare D1 catalog queries against `golden-films-db` (database ID `0241231b-6e6c-410b-a5ac-958eeb424a78`). Catalog queries inspect schema definitions only. No application records were read or changed, no export was started, and no migration was applied during this audit.
+This snapshot is based on read-only Cloudflare D1 catalog queries against `golden-films-db` (database ID `0241231b-6e6c-410b-a5ac-958eeb424a78`). Queries inspected schema definitions only; no application records were read or changed. The latest catalog inspection returned `changed_db=false` and `rows_written=0`. No export was started and no migration was applied.
 
-The Cloudflare Pages project is `golden-films`, with `main` as the production branch. The latest production Pages build/deploy succeeded, but the project configuration reports no production or preview environment variables and the latest deployment does not use Pages Functions. Treat the static-site deployment as separate from API readiness. PR #63 contains the draft Pages API bridge; do not merge it until the database restore/migration gate and Pages bindings are verified.
+The Cloudflare Pages project is `golden-films`, with `main` as the production branch. The static-site deployment is separate from API readiness. PR #63 contains the draft Pages API bridge; do not merge it until the database restore/migration gate and Pages bindings are verified.
 
 ## Tables confirmed in the live database
 
@@ -19,7 +19,7 @@ The SQLite catalog lists these application tables:
 - `admin_users`: `id`, `email`, `password_hash`, `password_salt`, `email_verified_at`, `is_active`, `created_at`, `last_login_at`.
 - `admin_sessions`, `admin_setup`, `auth_rate_limits`, `audit_logs`, `site_settings`, and Cloudflare's internal `_cf_KV`.
 
-The catalog does not list `site_content` or `site_content_revisions`. `admin_users` does not yet have `role`; `enquiries` does not yet have `consent`. A fresh read-only catalog query returned 12 application tables when Cloudflare's internal `_cf_KV` is excluded from the count convention used in the repository docs; the raw query listed 12 application tables plus `_cf_KV`.
+The catalog does not list `site_content` or `site_content_revisions`. `admin_users` does not yet have `role`; `enquiries` does not yet have `consent`. A read-only catalog query returned 12 application tables under the repository's counting convention excluding Cloudflare's internal `_cf_KV`; the raw query listed 12 application tables plus `_cf_KV`.
 
 ## Worker contract gaps confirmed by direct inspection
 
@@ -30,43 +30,47 @@ The current Worker readiness contract requires these pieces, which are absent fr
 3. `site_content`.
 4. `site_content_revisions`.
 
-Also, `enquiries.email` is currently `NOT NULL`, while the API supports phone-only enquiries. The current candidate forward migration at `docs/forward-migrations/2026-10-29-live-schema-forward.sql` now addresses this by rebuilding `enquiries`, copying existing records, allowing `email` to be nullable, and assigning historical records `consent=0`. It also adds the `role` column and CMS tables. This is a candidate migration only; it has not been run against production and is not approved for production until isolated restore testing succeeds.
+Also, `enquiries.email` is currently `NOT NULL`, while the API supports phone-only enquiries. The candidate forward migration at `docs/forward-migrations/2026-10-29-live-schema-forward.sql` rebuilds `enquiries`, copies existing records, allows `email` to be nullable, and assigns historical records `consent=0`. It also adds the `role` column and CMS tables. This is a candidate migration only; it has not been run against production and is not approved until isolated restore testing succeeds.
 
 The live schema uses the slug-based category/project/media model (`categories.title_en/title_hi`, `projects.category_slug`, `project_media`). Do not use older audit assumptions expecting `category_translations`, `projects.category_id`, or a separate media table.
 
+## `audit_logs` — exact live catalog shape verified
+
+A direct read-only `sqlite_master` query and `PRAGMA table_info('audit_logs')` on 2026-10-29 captured this definition:
+
+```sql
+CREATE TABLE audit_logs (
+ id TEXT PRIMARY KEY,
+ admin_user_id TEXT REFERENCES admin_users(id) ON DELETE SET NULL,
+ action TEXT NOT NULL,
+ target_type TEXT NOT NULL DEFAULT '',
+ target_id TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)
+```
+
+The table has `admin_user_id`; it does **not** have `actor_id` or `details_json`. The Worker uses `admin_user_id`, so the previously suspected production/Worker column mismatch is not present in the current catalog. The earlier SQLite fixture was wrong: it modeled `actor_id` and `details_json`. A follow-up test-only change is aligning that fixture with this verified audit-log definition. The Worker sometimes omits `target_type` and `target_id`; their empty-string defaults permit those inserts.
+
+This inspection confirms the table definition only. No audit-log row contents were read, no production records were changed, and it does not establish that the complete API bridge is ready to deploy.
+
 ## Required safe next steps
 
-1. Schedule a supported Cloudflare D1 export deliberately. Cloudflare warns an active export can temporarily make the database unavailable for queries and requires polling to completion; do not start it casually during normal use.
-2. Download the generated SQL and restore it to a disposable database. Verify the file, schema, and row counts against the source snapshot.
+1. Plan a supported Cloudflare D1 export deliberately. Cloudflare documents that an active export can temporarily make the database unavailable for queries and requires polling to completion; do not start one casually during normal use.
+2. Download the generated SQL and restore it to a disposable database. Verify the file, schema, and row counts against the source catalog.
 3. Apply the exact candidate forward migration only to that disposable copy.
-4. Run `scripts/verify-d1-migration.sql`, `scripts/audit-d1-schema.sql`, Worker regression tests, and `GET /api/ready` against the migrated test copy. Confirm existing categories, projects, translations, media, admin records, and enquiries are preserved; historical consent must remain `0`.
+4. Run `scripts/verify-d1-migration.sql`, `scripts/audit-d1-schema.sql`, Worker regression tests, and `GET /api/ready` against the migrated test copy. Confirm existing categories, projects, translations, media, admin records, audit logs, and enquiries are preserved; historical consent must remain `0`.
 5. Review the test evidence and obtain explicit approval before any production D1 write.
 6. Only after database compatibility is established, configure Pages D1 binding `DB` and secret `ADMIN_SETUP_SECRET` for preview and production, then review/merge the API bridge and run the documented smoke tests.
 7. Configure `MEDIA_BUCKET` only if uploads are explicitly enabled and the R2 free-tier/billing implications are reviewed.
 
 ## Current status
 
-- Read-only live schema inspection: complete; latest catalog query made no writes (`changed_db=false`, `rows_written=0`).
-- Candidate forward migration: revised to handle nullable email, historical consent default, admin role, and CMS tables.
+- Read-only live schema inspection: complete; no writes performed.
+- Exact live `audit_logs` column definitions: verified read-only on 2026-10-29.
+- Candidate forward migration: handles nullable email, historical consent default, admin role, and CMS tables, but remains unverified against a real restored export.
 - Full backup/export downloaded and restore-verified: not complete.
 - Disposable restore plus exact migration/test suite: not complete.
 - Production D1 migration: not performed.
 - Pages D1 binding and `ADMIN_SETUP_SECRET`: not configured.
-- Pages API bridge: remains draft PR #63 and is not active in the latest production deployment.
+- Pages API bridge: remains draft PR #63 and is not active in the production route configuration.
 - R2 bucket: not created; remain within the ₹0 budget unless explicitly authorized.
-
-## Additional compatibility gate: `audit_logs` columns
-
-The read-only catalog summary above confirms that `audit_logs` exists, but it does **not** record its full column list. The Worker currently inserts audit events using `audit_logs.admin_user_id` (including during initial admin setup). The disposable migration fixture in `scripts/test-forward-migration.py`, however, defines `audit_logs.actor_id` and does not define `admin_user_id`.
-
-This is a confirmed **test-fixture/contract mismatch**, not proof that the production table has either column layout. Do not infer the production schema from the fixture and do not add a production migration for this table based on this mismatch alone.
-
-Before approving the API bridge or any production migration:
-
-1. On a verified disposable restore of the real D1 export, inspect `PRAGMA table_info('audit_logs')` and capture the exact columns and constraints.
-2. Compare those results with every Worker query that reads or writes `audit_logs`.
-3. Update the fixture to faithfully represent the restored source schema; add a regression test for the chosen compatibility approach.
-4. If the real source schema differs from the Worker contract, prepare and test a forward-only fix against the disposable restore. Preserve existing audit history and verify foreign keys and row counts.
-5. Require `/api/ready` and admin setup/login audit-write tests to pass against that isolated migrated copy before reviewing deployment.
-
-Until those checks are complete, audit-log compatibility remains **unverified** and PR #63 must remain draft.
