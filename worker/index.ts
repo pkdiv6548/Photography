@@ -510,28 +510,19 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   if (url.pathname === "/api/ready" && request.method === "GET") {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     try {
-      // Validate the columns and tables used by live API queries, not just DB connectivity.
-      // LIMIT 0 keeps this a schema-only check without reading application rows.
-      await env.DB.prepare(
-        `SELECT c.is_published, ct.category_id, ct.language, ct.name,
-          p.category_id, p.cover_object_key, p.featured, p.event_date, p.updated_at,
-          e.email, e.event_date, e.consent, rl.ip_hash, rl.window_start, rl.request_count
-         FROM categories c
-         LEFT JOIN category_translations ct ON ct.category_id = c.id
-         LEFT JOIN projects p ON p.category_id = c.id
-         LEFT JOIN enquiries e ON 1 = 0
-         LEFT JOIN enquiry_rate_limits rl ON 1 = 0
-         LIMIT 0`
-      ).all();
-
-      // Column existence alone is insufficient: phone-only submissions bind SQL NULL
-      // for email, so a NOT NULL email constraint makes the API incompatible.
-      const enquiryColumns = await env.DB.prepare("PRAGMA table_info(enquiries)").all<{ name: string; notnull: number }>();
-      const emailColumn = (enquiryColumns.results ?? []).find((column) => column.name === "email");
-      if (!emailColumn || emailColumn.notnull !== 0) {
-        throw new Error("enquiries.email must permit NULL");
+      const required: Record<string, string[]> = {
+        categories: ["id", "slug", "sort_order", "title_en", "title_hi"],
+        projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at"],
+        project_translations: ["project_id", "locale", "title", "description"],
+        enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
+        enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
+      };
+      for (const [table, expected] of Object.entries(required)) {
+        const info = await env.DB.prepare("PRAGMA table_info(" + table + ")").all<{ name: string }>();
+        const actual = new Set((info.results ?? []).map((column) => column.name));
+        if (!expected.every((column) => actual.has(column))) throw new Error("incompatible table schema");
       }
-      return json({ status: "ready" });
+      return json({ status: "ready", schema: "legacy-compatible" });
     } catch {
       return json({ error: "database_schema_incompatible" }, 503);
     }
@@ -539,23 +530,18 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
   if ((url.pathname === "/api/categories" || url.pathname === "/api/v1/categories") && request.method === "GET") {
     const lang = url.searchParams.get("lang") ?? "en";
-    if (lang !== "en" && lang !== "hi") {
-      return json({ error: "invalid_language", supported: ["en", "hi"] }, 400);
-    }
+    if (lang !== "en" && lang !== "hi") return json({ error: "invalid_language", supported: ["en", "hi"] }, 400);
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     try {
       const result = await env.DB.prepare(
-        `SELECT c.id, c.slug, en.name AS title_en, hi.name AS title_hi, c.sort_order,
+        `SELECT c.id, c.slug, c.title_en, c.title_hi, c.description_en, c.description_hi, c.sort_order,
           CASE
             WHEN c.slug IN ('wedding-photography', 'pre-wedding-photography', 'portrait-personal-photography', 'fashion-model-photography', 'event-photography', 'product-photography', 'commercial-photography') THEN 'photography'
             WHEN c.slug IN ('cinematic-wedding-films', 'event-videography', 'promotional-commercial-videos', 'reels-short-form-videos', 'other-projects') THEN 'videography'
             ELSE 'editing'
           END AS group_name
          FROM categories c
-         LEFT JOIN category_translations en ON en.category_id = c.id AND en.language = 'en'
-         LEFT JOIN category_translations hi ON hi.category_id = c.id AND hi.language = 'hi'
-         WHERE c.is_published = 1
-         ORDER BY c.sort_order, en.name`
+         ORDER BY c.sort_order, c.title_en`
       ).all();
       return json({ categories: result.results ?? [], lang });
     } catch {
@@ -572,9 +558,16 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     const category = url.searchParams.get("category");
     try {
+      const baseSql =
+        "SELECT p.id, p.slug, p.category_slug, p.cover_image_url, p.status, p.is_featured AS is_featured, " +
+        "p.location, p.project_date, p.updated_at, en.title AS title_en, en.description AS description_en, " +
+        "hi.title AS title_hi, hi.description AS description_hi " +
+        "FROM projects p LEFT JOIN project_translations en ON en.project_id = p.id AND en.locale = 'en' " +
+        "LEFT JOIN project_translations hi ON hi.project_id = p.id AND hi.locale = 'hi' " +
+        "WHERE p.status = 'published' ";
       const query = category
-        ? env.DB.prepare("SELECT p.id, p.slug, c.slug AS category_slug, p.cover_object_key, p.status, p.featured AS is_featured, p.location, p.event_date AS project_date FROM projects p JOIN categories c ON c.id = p.category_id WHERE p.status = 'published' AND c.slug = ? ORDER BY p.featured DESC, p.updated_at DESC LIMIT ?").bind(category, limit)
-        : env.DB.prepare("SELECT p.id, p.slug, c.slug AS category_slug, p.cover_object_key, p.status, p.featured AS is_featured, p.location, p.event_date AS project_date FROM projects p JOIN categories c ON c.id = p.category_id WHERE p.status = 'published' ORDER BY p.featured DESC, p.updated_at DESC LIMIT ?").bind(limit);
+        ? env.DB.prepare(baseSql + "AND p.category_slug = ? ORDER BY p.is_featured DESC, p.updated_at DESC LIMIT ?").bind(category, limit)
+        : env.DB.prepare(baseSql + "ORDER BY p.is_featured DESC, p.updated_at DESC LIMIT ?").bind(limit);
       const result = await query.all();
       return json({ projects: result.results ?? [] });
     } catch {
@@ -638,23 +631,20 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
 
-    // Fail closed before the rate limiter performs any writes: the configured live D1
-    // database has a legacy schema, and this Worker must not partially operate against it.
+    // Verify the legacy live schema before any rate-limit or enquiry write.
+    // The consent column is deliberately required; it is added by the reviewed forward migration.
+    let enquiryDateColumn: "preferred_date" | "event_date" = "preferred_date";
     try {
-      await env.DB?.prepare(
-        `SELECT c.is_published, ct.category_id, ct.language, ct.name,
-          p.category_id, p.cover_object_key, p.featured, p.event_date, p.updated_at,
-          e.email, e.event_date, e.consent, rl.ip_hash, rl.window_start, rl.request_count
-         FROM categories c
-         LEFT JOIN category_translations ct ON ct.category_id = c.id
-         LEFT JOIN projects p ON p.category_id = c.id
-         LEFT JOIN enquiries e ON 1 = 0
-         LEFT JOIN enquiry_rate_limits rl ON 1 = 0
-         LIMIT 0`
-      ).all();
-      const columns = await env.DB?.prepare("PRAGMA table_info(enquiries)").all<{ name: string; notnull: number }>();
-      const emailColumn = (columns?.results ?? []).find((column) => column.name === "email");
-      if (!emailColumn || emailColumn.notnull !== 0) throw new Error("incompatible enquiries schema");
+      const columns = await env.DB.prepare("PRAGMA table_info(enquiries)").all<{ name: string }>();
+      const names = new Set((columns.results ?? []).map((column) => column.name));
+      const required = ["id", "name", "email", "phone", "service", "budget_range", "message", "consent", "status", "created_at", "updated_at"];
+      if (!required.every((column) => names.has(column))) throw new Error("incompatible enquiries schema");
+      if (names.has("preferred_date")) enquiryDateColumn = "preferred_date";
+      else if (names.has("event_date")) enquiryDateColumn = "event_date";
+      else throw new Error("missing event date column");
+      const limits = await env.DB.prepare("PRAGMA table_info(enquiry_rate_limits)").all<{ name: string }>();
+      const limitNames = new Set((limits.results ?? []).map((column) => column.name));
+      if (!["ip_hash", "window_start", "request_count"].every((column) => limitNames.has(column))) throw new Error("incompatible rate-limit schema");
     } catch {
       return json({ error: "database_schema_incompatible" }, 503);
     }
@@ -666,18 +656,17 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const id = crypto.randomUUID();
     try {
       await env.DB.prepare(
-        "INSERT INTO enquiries (id, name, email, phone, service, event_date, budget_range, message, consent, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)"
+        "INSERT INTO enquiries (id, name, email, phone, service, " + enquiryDateColumn + ", budget_range, message, consent, status, created_at, updated_at) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 'new', datetime('now'), datetime('now'))"
       ).bind(
         id,
         input.name,
-        input.email || null,
-        input.phone || null,
+        input.email || "",
+        input.phone || "",
         input.service,
         input.eventDate || null,
-        input.budgetRange || null,
+        input.budgetRange || "",
         input.message,
-        new Date().toISOString(),
-        new Date().toISOString(),
       ).run();
       return json({ ok: true, id, message: "Enquiry received. We will get back to you." }, 201);
     } catch {

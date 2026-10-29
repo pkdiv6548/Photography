@@ -17,19 +17,23 @@ test("readiness endpoint fails closed when D1 is not configured", async () => {
   assert.deepEqual(await response.json(), { error: "database_not_configured" });
 });
 
-test("readiness endpoint reports ready only when the expected schema is available", async () => {
-  let checkedSchema = "";
+test("readiness endpoint accepts the required legacy-compatible schema", async () => {
+  const schema: Record<string, string[]> = {
+    categories: ["id", "slug", "sort_order", "title_en", "title_hi"],
+    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at"],
+    project_translations: ["project_id", "locale", "title", "description"],
+    enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
+    enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
+  };
   const db = {
     prepare(query: string) {
-      checkedSchema += query;
       return {
         bind(..._args: unknown[]) { return this; },
         async first<T>() { return null as T | null; },
         async run() { return { success: true, meta: { changes: 0 } }; },
         async all<T>() {
-          if (query.includes("PRAGMA table_info(enquiries)")) {
-            return { success: true, results: [{ name: "email", notnull: 0 }] as T[] };
-          }
+          const match = query.match(/PRAGMA table_info\(([^)]+)\)/);
+          if (match) return { success: true, results: (schema[match[1]] ?? []).map(name => ({ name })) as T[] };
           return { success: true, results: [] as T[] };
         }
       };
@@ -37,30 +41,17 @@ test("readiness endpoint reports ready only when the expected schema is availabl
   };
   const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "ready" });
-  assert.match(checkedSchema, /category_translations/);
-  assert.match(checkedSchema, /cover_object_key/);
-  assert.match(checkedSchema, /e\.consent/);
-  assert.match(checkedSchema, /LIMIT 0/);
+  assert.deepEqual(await response.json(), { status: "ready", schema: "legacy-compatible" });
 });
 
-test("readiness endpoint rejects a connected database with the legacy schema", async () => {
-  const db = {
-    prepare(_query: string) {
-      return {
-        bind(..._args: unknown[]) { return this; },
-        async first<T>() { return null as T | null; },
-        async run() { return { success: true, meta: { changes: 0 } }; },
-        async all<T>() { throw new Error("no such table: category_translations"); }
-      };
-    }
+test("readiness endpoint rejects a schema missing the enquiry consent column", async () => {
+  const schema: Record<string, string[]> = {
+    categories: ["id", "slug", "sort_order", "title_en", "title_hi"],
+    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at"],
+    project_translations: ["project_id", "locale", "title", "description"],
+    enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "status", "created_at", "updated_at"],
+    enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
   };
-  const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
-  assert.equal(response.status, 503);
-  assert.deepEqual(await response.json(), { error: "database_schema_incompatible" });
-});
-
-test("readiness rejects a schema where enquiries.email is NOT NULL", async () => {
   const db = {
     prepare(query: string) {
       return {
@@ -68,9 +59,8 @@ test("readiness rejects a schema where enquiries.email is NOT NULL", async () =>
         async first<T>() { return null as T | null; },
         async run() { return { success: true, meta: { changes: 0 } }; },
         async all<T>() {
-          if (query.includes("PRAGMA table_info(enquiries)")) {
-            return { success: true, results: [{ name: "email", notnull: 1 }] as T[] };
-          }
+          const match = query.match(/PRAGMA table_info\(([^)]+)\)/);
+          if (match) return { success: true, results: (schema[match[1]] ?? []).map(name => ({ name })) as T[] };
           return { success: true, results: [] as T[] };
         }
       };
@@ -249,7 +239,10 @@ test("enquiry rate limit returns 429 and does not store the sixth request", asyn
         },
         async all<T>() {
           if (query.includes("PRAGMA table_info(enquiries)")) {
-            return { success: true, results: [{ name: "email", notnull: 0 }] as T[] };
+            return { success: true, results: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"].map(name => ({ name })) as T[] };
+          }
+          if (query.includes("PRAGMA table_info(enquiry_rate_limits)")) {
+            return { success: true, results: ["ip_hash", "window_start", "request_count"].map(name => ({ name })) as T[] };
           }
           return { success: true, results: [] as T[] };
         }
@@ -275,11 +268,9 @@ test("enquiry rate limit returns 429 and does not store the sixth request", asyn
   assert.equal(enquiryInsertAttempted, false);
 });
 
-test("phone-only enquiry is stored with a NULL email when D1 is available", async () => {
+test("phone-only enquiry is stored with an empty email when D1 is available", async () => {
   let storedEnquiryValues: unknown[] | undefined;
-  const schemaColumns = [
-    { name: "email", notnull: 0 }
-  ];
+  const schemaColumns = ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"].map(name => ({ name }));
   const db = {
     prepare(query: string) {
       let values: unknown[] = [];
@@ -300,6 +291,7 @@ test("phone-only enquiry is stored with a NULL email when D1 is available", asyn
         },
         async all<T>() {
           if (query.includes("PRAGMA table_info(enquiries)")) return { success: true, results: schemaColumns as T[] };
+          if (query.includes("PRAGMA table_info(enquiry_rate_limits)")) return { success: true, results: ["ip_hash", "window_start", "request_count"].map(name => ({ name })) as T[] };
           return { success: true, results: [] as T[] };
         }
       };
@@ -321,7 +313,7 @@ test("phone-only enquiry is stored with a NULL email when D1 is available", asyn
   );
   assert.equal(response.status, 201);
   assert.ok(storedEnquiryValues);
-  assert.equal(storedEnquiryValues[2], null, "email column should receive SQL NULL when omitted");
+  assert.equal(storedEnquiryValues[2], "", "legacy NOT NULL email column should receive an empty string when omitted");
 });
 
 test("categories endpoint returns bilingual category fields from D1", async () => {
@@ -332,7 +324,8 @@ test("categories endpoint returns bilingual category fields from D1", async () =
         async first<T>() { return null as T | null; },
         async run() { return { success: true, meta: { changes: 0 } }; },
         async all<T>() {
-          assert.match(query, /category_translations/);
+          assert.match(query, /c\.title_en/);
+          assert.doesNotMatch(query, /category_translations/);
           return {
             success: true,
             results: [{ id: "wedding", slug: "wedding-photography", title_en: "Wedding Photography", title_hi: "शादी की फोटोग्राफी", sort_order: 1, group_name: "photography" }] as T[]
@@ -360,7 +353,7 @@ test("projects endpoint binds category slug and limit and returns published-proj
         async first<T>() { return null as T | null; },
         async run() { return { success: true, meta: { changes: 0 } }; },
         async all<T>() {
-          return { success: true, results: [{ id: "project-1", slug: "sample-wedding", category_slug: "wedding-photography", cover_object_key: "covers/sample.jpg", status: "published", is_featured: 1, location: null, project_date: null }] as T[] };
+          return { success: true, results: [{ id: "project-1", slug: "sample-wedding", category_slug: "wedding-photography", cover_image_url: "https://media.example.test/covers/sample.jpg", status: "published", is_featured: 1, location: null, project_date: null, title_en: "Sample Wedding", title_hi: null, description_en: "Sample project", description_hi: null }] as T[] };
         }
       };
     }
@@ -373,7 +366,7 @@ test("projects endpoint binds category slug and limit and returns published-proj
   assert.match(preparedQuery, /p\.status = 'published'/);
   assert.deepEqual(boundValues, ["wedding-photography", 12]);
   assert.deepEqual(await response.json(), {
-    projects: [{ id: "project-1", slug: "sample-wedding", category_slug: "wedding-photography", cover_object_key: "covers/sample.jpg", status: "published", is_featured: 1, location: null, project_date: null }]
+    projects: [{ id: "project-1", slug: "sample-wedding", category_slug: "wedding-photography", cover_image_url: "https://media.example.test/covers/sample.jpg", status: "published", is_featured: 1, location: null, project_date: null, title_en: "Sample Wedding", title_hi: null, description_en: "Sample project", description_hi: null }]
   });
 });
 
