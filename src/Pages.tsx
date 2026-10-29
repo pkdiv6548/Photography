@@ -219,6 +219,181 @@ function AdminHomeContentEditor() {
   </section>;
 }
 
+type EditablePage = "about" | "services" | "showreel" | "contact";
+type PageContentFields = Record<string, { label: string; max: number; multiline?: boolean; url?: boolean }>;
+const secondaryPageFields: Record<EditablePage, PageContentFields> = {
+  about: {
+    titleEn: { label: "Page title · English", max: 120 }, titleHi: { label: "Page title · Hindi", max: 120 },
+    textEn: { label: "Page text · English", max: 1200, multiline: true }, textHi: { label: "Page text · Hindi", max: 1200, multiline: true },
+  },
+  services: {
+    titleEn: { label: "Page title · English", max: 120 }, titleHi: { label: "Page title · Hindi", max: 120 },
+    introEn: { label: "Introduction · English", max: 500, multiline: true }, introHi: { label: "Introduction · Hindi", max: 500, multiline: true },
+  },
+  showreel: {
+    titleEn: { label: "Page title · English", max: 120 }, titleHi: { label: "Page title · Hindi", max: 120 },
+    textEn: { label: "Description · English", max: 700, multiline: true }, textHi: { label: "Description · Hindi", max: 700, multiline: true },
+    videoUrl: { label: "Approved YouTube/Vimeo URL (optional)", max: 500, url: true },
+  },
+  contact: {
+    titleEn: { label: "Page title · English", max: 120 }, titleHi: { label: "Page title · Hindi", max: 120 },
+    textEn: { label: "Description · English", max: 700, multiline: true }, textHi: { label: "Description · Hindi", max: 700, multiline: true },
+  },
+};
+const defaultSecondaryContent: Record<EditablePage, Record<string, string>> = {
+  about: { titleEn: "About Golden Films", titleHi: "Golden Films के बारे में", textEn: "Golden Films is a photography, videography, photo-editing and video-editing portfolio.", textHi: "Golden Films फोटोग्राफी, वीडियोग्राफी, फोटो एडिटिंग और वीडियो एडिटिंग का पोर्टफोलियो है।" },
+  services: { titleEn: "Creative Services", titleHi: "क्रिएटिव सेवाएँ", introEn: "Photography, filmmaking and editing for meaningful moments and brands.", introHi: "खास पलों और ब्रांड्स के लिए फोटोग्राफी, फिल्ममेकिंग और एडिटिंग।" },
+  showreel: { titleEn: "Showreel", titleHi: "शो-रील", textEn: "Approved video links can be added here.", textHi: "यहाँ मंजूर किए गए वीडियो लिंक जोड़े जा सकते हैं।", videoUrl: "" },
+  contact: { titleEn: "Contact & Project Enquiry", titleHi: "संपर्क और प्रोजेक्ट पूछताछ", textEn: "Tell us about your project and preferred contact details.", textHi: "अपने प्रोजेक्ट और संपर्क विवरण के बारे में बताएँ।" },
+};
+
+function AdminSecondaryContentEditor() {
+  const [page, setPage] = useState<EditablePage>("about");
+  const [values, setValues] = useState<Record<string, string>>(defaultSecondaryContent.about);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setSaved(false);
+    setMessage("");
+    fetch("/api/admin/content", { credentials: "same-origin", cache: "no-store" })
+      .then(async response => {
+        if (response.status === 401) { window.location.replace("/login"); return null; }
+        if (!response.ok) throw new Error("content_unavailable");
+        return response.json() as Promise<{ pages?: Array<{ page_slug: string; draft_json: string }> }>;
+      })
+      .then(data => {
+        if (!active) return;
+        let next = { ...defaultSecondaryContent[page] };
+        const row = data?.pages?.find(item => item.page_slug === page);
+        if (row) {
+          try {
+            const draft = JSON.parse(row.draft_json) as Record<string, unknown>;
+            for (const key of Object.keys(next)) if (typeof draft[key] === "string") next[key] = draft[key] as string;
+          } catch { /* Keep defaults if stored content is invalid. */ }
+        }
+        setValues(next);
+      })
+      .catch(() => { if (active) setMessage("Content storage is not available yet. Check the database migration."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [page]);
+
+  const saveDraft = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/content/save", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ page, content: values })
+      });
+      if (!response.ok) throw new Error("save_failed");
+      setSaved(true);
+      setMessage("Draft saved. Publish it when you are ready.");
+    } catch { setMessage("Could not save the draft. Check the database migration and try again."); }
+    finally { setSaving(false); }
+  };
+
+  const publish = async () => {
+    if (!saved || saving) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/content/publish", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ page })
+      });
+      if (!response.ok) throw new Error("publish_failed");
+      setMessage("Page content published.");
+    } catch { setMessage("Could not publish. Save the draft and check the database migration."); }
+    finally { setSaving(false); }
+  };
+
+  return <section className="service-card" style={{ marginTop: 24 }}>
+    <p className="eyebrow"><span/> CONTENT MANAGEMENT</p><h2>Other page content</h2>
+    <label style={{ display: "grid", gap: 8, maxWidth: 320, marginTop: 16, fontSize: 12 }}>
+      Choose page
+      <select value={page} onChange={event => setPage(event.target.value as EditablePage)} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }}>
+        <option value="about">About</option><option value="services">Services</option><option value="showreel">Showreel</option><option value="contact">Contact</option>
+      </select>
+    </label>
+    {loading ? <p className="section-subtitle">Loading saved content…</p> : <form onSubmit={saveDraft}>
+      <div className="services-grid" style={{ marginTop: 20 }}>
+        {Object.entries(secondaryPageFields[page]).map(([key, field]) => <label key={key} style={{ display: "grid", gap: 8, alignContent: "start", fontSize: 12 }}>
+          <span>{field.label}</span>
+          {field.multiline
+            ? <textarea value={values[key] ?? ""} maxLength={field.max} rows={3} required onChange={event => { setValues(current => ({ ...current, [key]: event.target.value })); setSaved(false); }} style={{ width: "100%", resize: "vertical", padding: 12, color: "#eee", background: "#111416", border: "1px solid #45413a" }} />
+            : <input type={field.url ? "url" : "text"} value={values[key] ?? ""} maxLength={field.max} required={!field.url} onChange={event => { setValues(current => ({ ...current, [key]: event.target.value })); setSaved(false); }} style={{ width: "100%", padding: 12, color: "#eee", background: "#111416", border: "1px solid #45413a" }} />}
+        </label>)}
+      </div>
+      {message && <p role="status" className="form-notice" style={{ marginTop: 16 }}>{message}</p>}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 20 }}>
+        <button className="button button-outline" type="submit" disabled={saving}>{saving ? "Saving…" : "Save draft"}</button>
+        <button className="button button-gold" type="button" disabled={!saved || saving} onClick={publish}>{saving ? "Working…" : "Publish page"}</button>
+      </div>
+    </form>}
+  </section>;
+}
+
+function usePublishedPageContent(page: EditablePage) {
+  const [content, setContent] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let active = true;
+    fetch("/api/content?page=" + encodeURIComponent(page), { cache: "no-store" })
+      .then(async response => response.ok ? response.json() as Promise<{ content?: Record<string, string> }> : null)
+      .then(data => { if (active && data?.content) setContent(data.content); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [page]);
+  return content;
+}
+
+function AboutContentPage() {
+  const content = usePublishedPageContent("about");
+  return <SiteFrame eyebrow="THE CREATIVE BEHIND THE LENS" title={content.titleEn || "About Golden Films"}>
+    <p className="section-subtitle">{content.textEn || "Golden Films is a photography, videography, photo-editing and video-editing portfolio. The owner's approved biography and real project stories will be added when supplied."}</p>
+    <div className="categories-footnote"><Image size={16}/> Portfolio visuals currently contain sample/demo images, not verified client work.</div>
+  </SiteFrame>;
+}
+
+function ServicesContentPage() {
+  const content = usePublishedPageContent("services");
+  return <SiteFrame eyebrow="WHAT WE CREATE" title={content.titleEn || "Creative Services"}>
+    <p className="section-subtitle">{content.introEn || "Photography, filmmaking and editing for meaningful moments and brands."}</p>
+    <div className="services-grid">{[
+      { Icon: Camera, title: "Photography", description: "Weddings, pre-weddings, portraits, events, fashion and products." },
+      { Icon: Film, title: "Videography", description: "Cinematic wedding films, events, brand stories." },
+      { Icon: WandSparkles, title: "Photo editing", description: "Retouching, colour correction and creative finishing." },
+      { Icon: Clapperboard, title: "Video editing", description: "Cinematic cuts, colour grading, reels and short-form edits." }
+    ].map(({ Icon, title, description }) => <article className="service-card" key={title}><span className="service-icon large"><Icon size={25} /></span><h2>{title}</h2><p>{description}</p><a className="text-link" href="/contact">Ask about this service <ArrowRight size={15}/></a></article>)}</div>
+  </SiteFrame>;
+}
+
+function ShowreelContentPage() {
+  const content = usePublishedPageContent("showreel");
+  return <SiteFrame eyebrow="A MOVING PICTURE" title={content.titleEn || "Showreel"}>
+    <p className="section-subtitle">{content.textEn || "Approved video links can be added here. No real showreel video has been supplied yet."}</p>
+    {content.videoUrl
+      ? <p style={{ marginTop: 24 }}><a className="button button-gold" href={content.videoUrl} target="_blank" rel="noopener noreferrer">Watch approved showreel <ArrowRight size={15}/></a></p>
+      : <div className="categories-footnote"><Film size={18}/> Showreel video: awaiting owner-provided or approved video URL.</div>}
+  </SiteFrame>;
+}
+
+function ContactContentPage() {
+  const content = usePublishedPageContent("contact");
+  return <SiteFrame eyebrow="LET'S MAKE SOMETHING MEANINGFUL" title={content.titleEn || "Contact & Project Enquiry"}>
+    <p className="section-subtitle">{content.textEn || "The enquiry form currently lives on the home page. Phone, WhatsApp, email and Instagram contact details have not yet been provided."}</p>
+    <a className="button button-gold" href="/#contact">Open enquiry form <ArrowRight size={16}/></a>
+  </SiteFrame>;
+}
+
 function AdminDashboardPage() {
   const [state, setState] = useState<"loading" | "authenticated" | "unauthenticated" | "error">("loading");
   const [email, setEmail] = useState("");
@@ -357,6 +532,7 @@ function AdminDashboardPage() {
         </article>)}
       </section>
       <AdminHomeContentEditor />
+      <AdminSecondaryContentEditor />
       <div className="services-grid" style={{ marginTop: 30 }}>
         <article className="service-card"><h2>Portfolio & Media</h2><p>Photo/video upload, replacement and preview — implementation pending.</p></article>
         <article className="service-card"><h2>Page Content</h2><p>Homepage draft and publish editor is available above. Additional page sections are still under development.</p></article>
@@ -375,28 +551,10 @@ export default function Pages() {
     </article>)}</div>
     <h2 style={{ marginTop: 48 }}>Featured projects</h2><div className="featured-grid">{projects.filter(p => p.featured).map(p => <article className="project-card" key={p.id}><div className="project-image"><img src={p.image} alt={p.imageAlt.en} loading="lazy" /><span className="demo-tag">DEMO</span></div><div className="project-card-copy"><h3>{p.title.en}</h3><p>{p.category.en}</p></div></article>)}</div>
   </SiteFrame>;
-  if (path === "/services") return <SiteFrame eyebrow="WHAT WE CREATE" title="Creative Services">
-    <p className="section-subtitle">Photography, filmmaking and editing for meaningful moments and brands.</p>
-    <div className="services-grid">{[
-      { Icon: Camera, title: "Photography", description: "Weddings, pre-weddings, portraits, events, fashion and products." },
-      { Icon: Film, title: "Videography", description: "Cinematic wedding films, events and brand stories." },
-      { Icon: WandSparkles, title: "Photo editing", description: "Retouching, colour correction and creative finishing." },
-      { Icon: Clapperboard, title: "Video editing", description: "Cinematic cuts, colour grading, reels and short-form edits." }
-    ].map(({ Icon, title, description }) => <article className="service-card" key={title}><span className="service-icon large"><Icon size={25} /></span><h2>{title}</h2><p>{description}</p><a className="text-link" href="/contact">Ask about this service <ArrowRight size={15}/></a></article>)}</div>
-  </SiteFrame>;
-  if (path === "/about") return <SiteFrame eyebrow="THE CREATIVE BEHIND THE LENS" title="About Golden Films">
-    <p className="section-subtitle">Golden Films is a photography, videography, photo-editing and video-editing portfolio. The owner's approved biography and real project stories will be added when supplied.</p>
-    <div className="categories-footnote"><Image size={16}/> Portfolio visuals currently contain sample/demo images, not verified client work.</div>
-  </SiteFrame>;
-  if (path === "/showreel") return <SiteFrame eyebrow="A MOVING PICTURE" title="Showreel">
-    <p className="section-subtitle">Approved video links can be added here. No real showreel video has been supplied yet, so this page does not pretend demo media is an actual client film.</p>
-    <div className="categories-footnote"><Film size={18}/> Showreel video: awaiting owner-provided or approved video URL.</div>
-  </SiteFrame>;
-  if (path === "/contact") return <SiteFrame eyebrow="LET'S MAKE SOMETHING MEANINGFUL" title="Contact & Project Enquiry">
-    <p className="section-subtitle">The enquiry form currently lives on the home page. The backend is not yet deployed and database compatibility must be fixed before submissions can be accepted.</p>
-    <a className="button button-gold" href="/#contact">Open enquiry form <ArrowRight size={16}/></a>
-    <p style={{ marginTop: 24 }}>Phone, WhatsApp, email and Instagram contact details have not yet been provided by the site owner.</p>
-  </SiteFrame>;
+  if (path === "/services") return <ServicesContentPage />;
+  if (path === "/about") return <AboutContentPage />;
+  if (path === "/showreel") return <ShowreelContentPage />;
+  if (path === "/contact") return <ContactContentPage />;
   if (path === "/login") return <AdminLoginPage />;
   if (path === "/register") return <SiteFrame eyebrow="ADMIN AREA" title="Initial Admin Setup">
     <div className="service-card" style={{ maxWidth: 620 }}>
