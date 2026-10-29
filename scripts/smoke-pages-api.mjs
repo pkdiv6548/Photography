@@ -36,6 +36,9 @@ const checks = [
       if (!body || typeof body !== "object" || Array.isArray(body)) {
         throw new Error("expected a JSON object");
       }
+      if (body.status !== "ok" || body.service !== "golden-films-api") {
+        throw new Error(`expected status="ok" and service="golden-films-api", got ${JSON.stringify(body)}`);
+      }
     },
   },
   {
