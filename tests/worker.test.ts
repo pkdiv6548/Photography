@@ -546,3 +546,45 @@ test("initial admin setup explicitly assigns the owner role", async () => {
   assert.match(insert, /password_salt, role, is_active/);
   assert.match(insert, /'owner'/);
 });
+
+
+test("initial admin setup refuses when no owner row is inserted", async () => {
+  const statements: string[] = [];
+  const db = {
+    prepare(query: string) {
+      statements.push(query);
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("INSERT INTO auth_rate_limits")) return { request_count: 1 } as T;
+          return null as T | null;
+        },
+        async run() {
+          if (query.includes("INSERT INTO admin_users")) {
+            return { success: true, meta: { changes: 0 } };
+          }
+          return { success: true, meta: { changes: 1 } };
+        },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/setup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-setup-secret": "test-setup-secret"
+      },
+      body: JSON.stringify({
+        email: "owner@example.test",
+        password: "a-long-test-password-123"
+      })
+    }),
+    { DB: db, ADMIN_SETUP_SECRET: "test-setup-secret" }
+  );
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), { error: "initial_setup_already_completed" });
+  assert.equal(statements.some(query => query.includes("INSERT INTO audit_logs")), false);
+  assert.equal(statements.some(query => query.includes("UPDATE admin_setup")), false);
+});
