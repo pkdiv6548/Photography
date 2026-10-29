@@ -241,6 +241,27 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
         }
         self.assertTrue({"site_content", "site_content_revisions"}.issubset(table_names))
 
+        content_columns = {
+            row["name"] for row in self.db.execute("PRAGMA table_info(site_content)")
+        }
+        self.assertTrue(
+            {"page_slug", "draft_json", "published_json", "status", "updated_by", "updated_at", "published_at"}.issubset(content_columns),
+            "site_content must expose the columns used by the Worker CMS contract",
+        )
+        revision_columns = {
+            row["name"] for row in self.db.execute("PRAGMA table_info(site_content_revisions)")
+        }
+        self.assertTrue(
+            {"id", "page_slug", "content_json", "revision_status", "changed_by", "created_at"}.issubset(revision_columns),
+            "site_content_revisions must expose the columns used by the Worker CMS contract",
+        )
+        cms_indexes = {
+            row["name"] for row in self.db.execute(
+                "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_autoindex_%'"
+            )
+        }
+        self.assertIn("idx_site_content_revisions_page_created", cms_indexes)
+
         # Worker audit inserts omit target fields for some event types; the live
         # schema defaults must permit those inserts without requiring extra fields.
         self.db.execute(
