@@ -352,6 +352,127 @@ async function supportedEnquiryStatuses(db: D1Binding): Promise<string[]> {
   return ["new"];
 }
 
+
+const CONTENT_FIELDS: Record<string, Record<string, number>> = {
+  home: {
+    heroTitleEn: 120, heroTitleHi: 120, heroTextEn: 500, heroTextHi: 500,
+    aboutTitleEn: 120, aboutTitleHi: 120, aboutTextEn: 700, aboutTextHi: 700,
+    contactTitleEn: 120, contactTitleHi: 120, contactTextEn: 500, contactTextHi: 500,
+  },
+  about: { titleEn: 120, titleHi: 120, textEn: 1200, textHi: 1200 },
+  services: { titleEn: 120, titleHi: 120, introEn: 500, introHi: 500 },
+  showreel: { titleEn: 120, titleHi: 120, textEn: 700, textHi: 700, videoUrl: 500 },
+  contact: { titleEn: 120, titleHi: 120, textEn: 700, textHi: 700 },
+};
+
+function validatePageContent(page: string, raw: unknown): Record<string, string> | null {
+  const fields = CONTENT_FIELDS[page];
+  if (!fields || !raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const input = raw as Record<string, unknown>;
+  const keys = Object.keys(input);
+  if (!keys.length || keys.some((key) => !(key in fields))) return null;
+  const output: Record<string, string> = {};
+  for (const key of keys) {
+    const value = input[key];
+    if (typeof value !== "string") return null;
+    const clean = value.trim();
+    if (clean.length > fields[key] || /<\s*\/?\s*[a-z!][^>]*>/i.test(clean)) return null;
+    if (key === "videoUrl" && clean) {
+      try {
+        const parsed = new URL(clean);
+        if (parsed.protocol !== "https:" || !["youtube.com", "www.youtube.com", "youtu.be", "www.youtu.be", "vimeo.com", "www.vimeo.com", "player.vimeo.com"].includes(parsed.hostname)) return null;
+      } catch { return null; }
+    }
+    output[key] = clean;
+  }
+  return output;
+}
+
+async function handleContentApi(request: Request, env: Env, url: URL): Promise<Response | null> {
+  const path = url.pathname;
+  if (path === "/api/content" && request.method === "GET") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const page = url.searchParams.get("page") ?? "home";
+    if (!(page in CONTENT_FIELDS)) return json({ error: "invalid_page" }, 400);
+    try {
+      const row = await env.DB.prepare(
+        "SELECT published_json, status FROM site_content WHERE page_slug = ?"
+      ).bind(page).first<{ published_json: string; status: string }>();
+      if (!row || row.status !== "published") return json({ page, content: {} });
+      const content: unknown = JSON.parse(row.published_json);
+      return json({ page, content: content && typeof content === "object" && !Array.isArray(content) ? content : {} });
+    } catch {
+      return json({ error: "content_unavailable" }, 503);
+    }
+  }
+
+  if (path === "/api/admin/content" && request.method === "GET") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);
+    try {
+      const result = await env.DB.prepare(
+        "SELECT page_slug, draft_json, published_json, status, updated_at, published_at FROM site_content ORDER BY page_slug"
+      ).all();
+      return json({ pages: result.results ?? [] });
+    } catch {
+      return json({ error: "content_unavailable" }, 503);
+    }
+  }
+
+  if (path === "/api/admin/content/save" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    const body = await readAdminJson(request);
+    const page = cleanText(body?.page, 20);
+    const content = validatePageContent(page, body?.content);
+    if (!content) return json({ error: "validation_failed", allowedPages: Object.keys(CONTENT_FIELDS) }, 400);
+    const serialized = JSON.stringify(content);
+    try {
+      await env.DB.prepare(
+        "INSERT INTO site_content (page_slug, draft_json, status, updated_by, updated_at) VALUES (?, ?, 'draft', ?, datetime('now')) " +
+        "ON CONFLICT(page_slug) DO UPDATE SET draft_json = excluded.draft_json, status = 'draft', updated_by = excluded.updated_by, updated_at = datetime('now')"
+      ).bind(page, serialized, admin.id).run();
+      await env.DB.prepare(
+        "INSERT INTO site_content_revisions (id, page_slug, content_json, revision_status, changed_by) VALUES (?, ?, ?, 'draft', ?)"
+      ).bind(crypto.randomUUID(), page, serialized, admin.id).run();
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'content_saved_draft', 'page', ?)"
+      ).bind(crypto.randomUUID(), admin.id, page).run();
+      return json({ ok: true, page, status: "draft" });
+    } catch {
+      return json({ error: "content_save_unavailable" }, 503);
+    }
+  }
+
+  if (path === "/api/admin/content/publish" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    const body = await readAdminJson(request);
+    const page = cleanText(body?.page, 20);
+    if (!(page in CONTENT_FIELDS)) return json({ error: "invalid_page" }, 400);
+    try {
+      const result = await env.DB.prepare(
+        "UPDATE site_content SET published_json = draft_json, status = 'published', published_at = datetime('now'), updated_at = datetime('now'), updated_by = ? WHERE page_slug = ?"
+      ).bind(admin.id, page).run();
+      if ((result.meta?.changes ?? 0) !== 1) return json({ error: "draft_not_found" }, 404);
+      const row = await env.DB.prepare("SELECT draft_json FROM site_content WHERE page_slug = ?").bind(page).first<{ draft_json: string }>();
+      if (!row) return json({ error: "draft_not_found" }, 404);
+      await env.DB.prepare(
+        "INSERT INTO site_content_revisions (id, page_slug, content_json, revision_status, changed_by) VALUES (?, ?, ?, 'published', ?)"
+      ).bind(crypto.randomUUID(), page, row.draft_json, admin.id).run();
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'content_published', 'page', ?)"
+      ).bind(crypto.randomUUID(), admin.id, page).run();
+      return json({ ok: true, page, status: "published" });
+    } catch {
+      return json({ error: "content_publish_unavailable" }, 503);
+    }
+  }
+  return null;
+}
+
 async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const origin = request.headers.get("origin");
@@ -378,6 +499,8 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
   const adminAuthResponse = await handleAdminAuth(request, env, url);
   if (adminAuthResponse) return adminAuthResponse;
+  const contentResponse = await handleContentApi(request, env, url);
+  if (contentResponse) return contentResponse;
 
   if (url.pathname === "/api/health" && request.method === "GET") {
     return json({ status: "ok", service: "golden-films-api" });
