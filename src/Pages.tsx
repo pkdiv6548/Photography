@@ -43,7 +43,10 @@ function AdminLoginPage() {
         credentials: "same-origin",
         body: JSON.stringify({ email, password })
       });
-      if (!response.ok) throw new Error("login_failed");
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!response.ok || !contentType.toLowerCase().includes("application/json")) throw new Error("login_failed");
+      const result = await response.json() as { ok?: boolean };
+      if (result.ok !== true) throw new Error("login_failed");
       window.location.replace("/admin");
     } catch {
       setStatus("error");
