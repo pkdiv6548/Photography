@@ -375,10 +375,10 @@ function isSafeExternalMediaUrl(value: string): boolean {
     if (url.protocol !== "https:" || url.username || url.password) return false;
     const host = url.hostname.toLowerCase();
     const labels = host.split(".");
-    const isIpv4Literal = labels.length === 4 && labels.every(label => /^\\d{1,3}$/.test(label));
+    const isIpv4Literal = labels.length === 4 && labels.every(label => /^\d{1,3}$/.test(label));
     if (!host || host.startsWith("[") || isIpv4Literal || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return false;
-    if (/^(127\\.|10\\.|192\\.168\\.|169\\.254\\.)/.test(host)) return false;
-    const private172 = host.match(/^172\\.(\\d+)\\./);
+    if (/^(127\.|10\.|192\.168\.|169\.254\.)/.test(host)) return false;
+    const private172 = host.match(/^172\.(\d+)\./);
     if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) return false;
     return true;
   } catch {
@@ -393,7 +393,7 @@ function isSafeCoverUrl(value: string): boolean {
   const parts = value.slice(prefix.length).split("/");
   return parts.length === 2 &&
     /^[0-9a-f-]{36}$/i.test(parts[0]) &&
-    /^[0-9a-f-]{36}\\.(?:jpg|jpeg|png|webp|gif)$/i.test(parts[1]);
+    /^[0-9a-f-]{36}\.(?:jpg|jpeg|png|webp|gif)$/i.test(parts[1]);
 }
 
 const CONTENT_FIELDS: Record<string, Record<string, number>> = {
