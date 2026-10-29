@@ -54,3 +54,19 @@ The live schema uses the slug-based category/project/media model (`categories.ti
 - Pages D1 binding and `ADMIN_SETUP_SECRET`: not configured.
 - Pages API bridge: remains draft PR #63 and is not active in the latest production deployment.
 - R2 bucket: not created; remain within the ₹0 budget unless explicitly authorized.
+
+## Additional compatibility gate: `audit_logs` columns
+
+The read-only catalog summary above confirms that `audit_logs` exists, but it does **not** record its full column list. The Worker currently inserts audit events using `audit_logs.admin_user_id` (including during initial admin setup). The disposable migration fixture in `scripts/test-forward-migration.py`, however, defines `audit_logs.actor_id` and does not define `admin_user_id`.
+
+This is a confirmed **test-fixture/contract mismatch**, not proof that the production table has either column layout. Do not infer the production schema from the fixture and do not add a production migration for this table based on this mismatch alone.
+
+Before approving the API bridge or any production migration:
+
+1. On a verified disposable restore of the real D1 export, inspect `PRAGMA table_info('audit_logs')` and capture the exact columns and constraints.
+2. Compare those results with every Worker query that reads or writes `audit_logs`.
+3. Update the fixture to faithfully represent the restored source schema; add a regression test for the chosen compatibility approach.
+4. If the real source schema differs from the Worker contract, prepare and test a forward-only fix against the disposable restore. Preserve existing audit history and verify foreign keys and row counts.
+5. Require `/api/ready` and admin setup/login audit-write tests to pass against that isolated migrated copy before reviewing deployment.
+
+Until those checks are complete, audit-log compatibility remains **unverified** and PR #63 must remain draft.
