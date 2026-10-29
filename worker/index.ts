@@ -684,6 +684,13 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         project_translations: ["project_id", "locale", "title", "description"],
         enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
         enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
+        admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
+        admin_sessions: ["id", "admin_user_id", "token_hash", "expires_at"],
+        admin_setup: ["id", "completed_at"],
+        auth_rate_limits: ["rate_key", "window_started_at", "request_count"],
+        audit_logs: ["id", "admin_user_id", "action", "target_type", "target_id", "created_at"],
+        site_content: ["page_slug", "draft_json", "published_json", "status", "updated_at"],
+        site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "created_at"],
       };
       for (const [table, expected] of Object.entries(required)) {
         const info = await env.DB.prepare("PRAGMA table_info(" + table + ")").all<{ name: string }>();
@@ -1228,6 +1235,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       const projectColumns = new Set((projectInfo.results ?? []).map(column => column.name));
       const categoryInfo = await env.DB.prepare("PRAGMA table_info(categories)").all<{ name: string }>();
       const categoryColumns = new Set((categoryInfo.results ?? []).map(column => column.name));
+      const adminInfo = await env.DB.prepare("PRAGMA table_info(admin_users)").all<{ name: string }>();
+      const adminColumns = new Set((adminInfo.results ?? []).map(column => column.name));
+      const adminRoleSchemaReady = adminColumns.has("role");
       const adminCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM admin_users").first<{ count: number }>();
       const setup = await env.DB.prepare("SELECT completed_at FROM admin_setup WHERE id = 1").first<{ completed_at: string | null }>();
       const contentTablesReady = tables.has("site_content") && tables.has("site_content_revisions");
@@ -1242,6 +1252,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         databaseConfigured: true,
         adminSetupSecretConfigured: Boolean(env.ADMIN_SETUP_SECRET),
         adminSetupComplete: Boolean(setup?.completed_at) || (adminCount?.count ?? 0) > 0,
+        adminRoleSchemaReady,
         adminCount: adminCount?.count ?? 0,
         enquirySchemaReady,
         portfolioSchemaReady,
@@ -1249,6 +1260,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         mediaStorageConfigured: Boolean(env.MEDIA_BUCKET),
         blockers: [
           ...(!env.ADMIN_SETUP_SECRET ? ["ADMIN_SETUP_SECRET is not configured"] : []),
+          ...(!adminRoleSchemaReady ? ["Owner/editor role migration is pending"] : []),
           ...(!enquirySchemaReady ? ["Enquiry consent/schema migration is pending"] : []),
           ...(!portfolioSchemaReady ? ["Portfolio schema is incompatible"] : []),
           ...(!contentTablesReady ? ["CMS content tables are missing"] : []),
