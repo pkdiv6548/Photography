@@ -229,6 +229,11 @@ export default function App() {
             const routes = ["/", "/portfolio", "/services", "/about", "/showreel", "/contact"];
             return <a key={routes[index]} href={routes[index]} onClick={() => setMenuOpen(false)}>{label}</a>;
           })}
+          <div className="mobile-admin-links" aria-label="Admin access">
+            <a href="/login.html" onClick={() => setMenuOpen(false)}>{language === "en" ? "Admin Login" : "एडमिन लॉगिन"}</a>
+            <a href="/register.html" onClick={() => setMenuOpen(false)}>{language === "en" ? "Owner Setup" : "ओनर सेटअप"}</a>
+            <a href="/admin.html" onClick={() => setMenuOpen(false)}>{language === "en" ? "Admin Dashboard" : "एडमिन डैशबोर्ड"}</a>
+          </div>
         </nav>
         <div className="header-actions">
           <div className="language-toggle" aria-label="Choose language">
