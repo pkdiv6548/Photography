@@ -1,0 +1,34 @@
+name: Pages API smoke script checks
+
+on:
+  pull_request:
+    branches: [feat/pages-worker-api-bridge]
+    paths:
+      - "scripts/smoke-pages-api.mjs"
+      - ".github/workflows/pages-api-smoke-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate smoke script syntax
+        run: node --check scripts/smoke-pages-api.mjs
+      - name: Validate script refuses missing URL safely
+        shell: bash
+        run: |
+          set +e
+          output=$(node scripts/smoke-pages-api.mjs 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          test "$status" -eq 2
+          printf '%s' "$output" | grep -q 'Usage: node scripts/smoke-pages-api.mjs'
