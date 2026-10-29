@@ -142,7 +142,7 @@ function AdminHomeContentEditor() {
             const merged = { ...defaultHomeContent };
             for (const key of Object.keys(merged)) if (typeof draft[key] === "string") merged[key] = draft[key] as string;
             setValues(merged);
-            setSaved(home.status === "draft");
+            setSaved(false);
           } catch { /* Keep safe defaults if stored JSON is invalid. */ }
         }
       })
