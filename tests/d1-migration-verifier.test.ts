@@ -47,6 +47,6 @@ test("schema audit matches live table and column names", () => {
 
 test("schema audit is read-only and reports missing required columns", () => {
   assert.match(audit, /^\s*--[\s\S]*WITH expected/i);
-  assert.match(audit, /WHEN a\.column_name IS NULL THEN 'MISSING'/i);
+  assert.match(audit, /WHEN NOT EXISTS \([\s\S]*THEN 'MISSING'/i);
   assert.doesNotMatch(audit, /^\s*(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|ATTACH|DETACH)\b/im);
 });
