@@ -760,6 +760,42 @@ function AdminPortfolioManager() {
   </section>;
 }
 
+type AuditEvent = { id: string; action: string; target_type: string; target_id: string; created_at: string; admin_email: string | null };
+
+function AdminAuditLog() {
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const load = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/audit", { credentials: "same-origin", cache: "no-store" });
+      if (response.status === 401) { window.location.replace("/login"); return; }
+      if (!response.ok) throw new Error("audit_unavailable");
+      const data = await response.json() as { events?: AuditEvent[] };
+      setEvents(data.events ?? []);
+      setError("");
+    } catch {
+      setError("Audit log is unavailable until the backend and database schema are configured.");
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { void load(); }, []);
+  return <section className="service-card" style={{ marginTop: 30 }}>
+    <p className="eyebrow"><span/> SECURITY & ACCOUNTABILITY</p><h2>Audit log</h2>
+    <p className="section-subtitle">Recent admin logins, content changes, project publishing and media actions.</p>
+    {loading && <p className="section-subtitle">Loading audit events…</p>}
+    {error && <p role="status" className="form-notice">{error}</p>}
+    {!loading && !error && events.length === 0 && <p className="section-subtitle">No audit events recorded yet.</p>}
+    {!loading && events.map(event => <div key={event.id} style={{ padding: "12px 0", borderTop: "1px solid #333" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8 }}>
+        <strong>{event.action.replaceAll("_", " ")}</strong><span className="section-subtitle">{event.created_at}</span>
+      </div>
+      <p className="section-subtitle">{event.admin_email || "System / unknown admin"} · {event.target_type}{event.target_id ? " · " + event.target_id : ""}</p>
+    </div>)}
+    <button type="button" className="button button-outline" onClick={() => void load()} disabled={loading} style={{ marginTop: 16 }}>Refresh audit log</button>
+  </section>;
+}
+
 function AdminDashboardPage() {
   const [state, setState] = useState<"loading" | "authenticated" | "unauthenticated" | "error">("loading");
   const [email, setEmail] = useState("");
@@ -900,6 +936,7 @@ function AdminDashboardPage() {
       <AdminHomeContentEditor />
       <AdminSecondaryContentEditor />
       <AdminPortfolioManager />
+      <AdminAuditLog />
       <div className="services-grid" style={{ marginTop: 30 }}>
         <article className="service-card"><h2>Page Content</h2><p>Homepage and other page draft/publish editors are available above.</p></article>
       </div>
