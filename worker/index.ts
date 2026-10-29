@@ -550,6 +550,78 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     }
   }
 
+
+  if (url.pathname === "/api/admin/enquiries" && request.method === "GET") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    const rawLimit = url.searchParams.get("limit") ?? "50";
+    const rawOffset = url.searchParams.get("offset") ?? "0";
+    const limit = Number(rawLimit);
+    const offset = Number(rawOffset);
+    if (!/^\d+$/.test(rawLimit) || !Number.isInteger(limit) || limit < 1 || limit > 100 ||
+        !/^\d+$/.test(rawOffset) || !Number.isInteger(offset) || offset < 0 || offset > 10000) {
+      return json({ error: "invalid_pagination" }, 400);
+    }
+    const status = url.searchParams.get("status") ?? "";
+    if (status && !["new", "read", "archived"].includes(status)) {
+      return json({ error: "invalid_status", allowed: ["new", "read", "archived"] }, 400);
+    }
+    try {
+      const schema = await env.DB.prepare("PRAGMA table_info(enquiries)").all<{ name: string }>();
+      const columns = new Set((schema.results ?? []).map((column) => column.name));
+      const required = ["id", "name", "email", "phone", "service", "budget_range", "message", "status", "created_at", "updated_at"];
+      if (!required.every((column) => columns.has(column))) return json({ error: "database_schema_incompatible" }, 503);
+      const dateColumn = columns.has("preferred_date") ? "preferred_date" : columns.has("event_date") ? "event_date" : null;
+      if (!dateColumn) return json({ error: "database_schema_incompatible" }, 503);
+      const statement = status
+        ? env.DB.prepare(
+          "SELECT id, name, email, phone, service, " + dateColumn + " AS event_date, budget_range, message, status, created_at, updated_at " +
+          "FROM enquiries WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        ).bind(status, limit, offset)
+        : env.DB.prepare(
+          "SELECT id, name, email, phone, service, " + dateColumn + " AS event_date, budget_range, message, status, created_at, updated_at " +
+          "FROM enquiries ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        ).bind(limit, offset);
+      const result = await statement.all();
+      const count = await env.DB.prepare(
+        "SELECT status, COUNT(*) AS count FROM enquiries GROUP BY status"
+      ).all<{ status: string; count: number }>();
+      return json({ enquiries: result.results ?? [], counts: count.results ?? [], limit, offset });
+    } catch {
+      return json({ error: "enquiries_unavailable" }, 503);
+    }
+  }
+
+  if (url.pathname === "/api/admin/enquiries/status" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    const body = await readAdminJson(request);
+    const id = cleanText(body?.id, 80);
+    const status = cleanText(body?.status, 20);
+    if (!id || !["new", "read", "archived"].includes(status)) {
+      return json({ error: "validation_failed", allowedStatuses: ["new", "read", "archived"] }, 400);
+    }
+    try {
+      const columns = await env.DB.prepare("PRAGMA table_info(enquiries)").all<{ name: string }>();
+      const available = new Set((columns.results ?? []).map((column) => column.name));
+      if (!["id", "status", "updated_at"].every((column) => available.has(column))) {
+        return json({ error: "database_schema_incompatible" }, 503);
+      }
+      const update = await env.DB.prepare(
+        "UPDATE enquiries SET status = ?, updated_at = datetime('now') WHERE id = ?"
+      ).bind(status, id).run();
+      if ((update.meta?.changes ?? 0) !== 1) return json({ error: "enquiry_not_found" }, 404);
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, ?, 'enquiry', ?)"
+      ).bind(crypto.randomUUID(), admin.id, "enquiry_status_" + status, id).run();
+      return json({ ok: true, id, status });
+    } catch {
+      return json({ error: "enquiry_update_unavailable" }, 503);
+    }
+  }
+
   if (url.pathname.startsWith("/api/")) return json({ error: "not_found" }, 404);
   return new Response("Not found.", { status: 404 });
 }
