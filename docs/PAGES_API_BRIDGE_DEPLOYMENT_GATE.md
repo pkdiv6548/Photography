@@ -81,3 +81,9 @@ The operator has explicitly chosen **not to create a backup at this time**. Unti
 - Keep the production site on its existing deployment until a safe database migration path is explicitly approved.
 
 This decision does not count as backup/restore progress; that gate remains at its prior status and is intentionally paused.
+
+## Repository verification update — 2026-10-29
+
+- Commit `f6860ab2de11209244d01b9796b1e95104f0bf19` added a Worker health-response regression test asserting `Cache-Control: no-store` and JSON `Content-Type`.
+- GitHub Actions run [40868771741](https://github.com/pkdiv6548/Photography/actions/runs/40868771741) completed successfully. The frontend/Worker typecheck, Worker API regression tests, forward-migration SQLite fixture test, and frontend build all passed.
+- This is repository/fixture evidence only. It does not verify the deployed preview API runtime, production D1 compatibility, or authorize production activation.
