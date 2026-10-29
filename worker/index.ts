@@ -208,12 +208,12 @@ async function authRateLimited(request: Request, env: Env, purpose: string): Pro
   }
 }
 
-async function readAdminJson(request: Request): Promise<Record<string, unknown> | null> {
+async function readAdminJson(request: Request, maxBytes = 4096): Promise<Record<string, unknown> | null> {
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.split(";")[0].trim().toLowerCase() !== "application/json") return null;
-  if (Number(request.headers.get("content-length") ?? "0") > 4096) return null;
+  if (Number(request.headers.get("content-length") ?? "0") > maxBytes) return null;
   const parsed = await readLimitedBody(request);
-  if (parsed.tooLarge || parsed.invalid || parsed.text === undefined || parsed.text.length > 4096) return null;
+  if (parsed.tooLarge || parsed.invalid || parsed.text === undefined || parsed.text.length > maxBytes) return null;
   try {
     const value: unknown = JSON.parse(parsed.text);
     return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -424,7 +424,7 @@ async function handleContentApi(request: Request, env: Env, url: URL): Promise<R
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     const admin = await currentAdmin(request, env);
     if (!admin) return json({ error: "unauthorized" }, 401);
-    const body = await readAdminJson(request);
+    const body = await readAdminJson(request, 8192);
     const page = cleanText(body?.page, 20);
     const content = validatePageContent(page, body?.content);
     if (!content) return json({ error: "validation_failed", allowedPages: Object.keys(CONTENT_FIELDS) }, 400);
