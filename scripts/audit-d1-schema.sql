@@ -1,9 +1,8 @@
 -- Read-only contract audit for the current Golden Films Worker API.
 -- Run in the Cloudflare D1 SQL console against the intended database.
--- No application rows are selected; this compares required column names and
--- the nullable-email contract using SQLite schema metadata only.
--- Results: PRESENT, MISSING, or INCOMPATIBLE_NOT_NULL.
--- This is diagnostic only; it does not validate all constraints or data mappings.
+-- This compares required column names and the nullable-email contract using
+-- SQLite schema metadata only. Results: PRESENT, MISSING, INCOMPATIBLE_NOT_NULL.
+-- Diagnostic only; it does not validate all constraints or data mappings.
 
 WITH expected(table_name, column_name, must_allow_null) AS (
   SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]')
@@ -28,28 +27,16 @@ WITH expected(table_name, column_name, must_allow_null) AS (
     ["site_content","page_slug",0],["site_content","draft_json",0],["site_content","published_json",0],["site_content","status",0],["site_content","updated_at",0],
     ["site_content_revisions","id",0],["site_content_revisions","page_slug",0],["site_content_revisions","content_json",0],["site_content_revisions","revision_status",0],["site_content_revisions","created_at",0]
   ]')
-),
-actual(table_name, column_name, is_not_null) AS (
-  SELECT 'categories', name, "notnull" FROM pragma_table_info('categories')
-  UNION ALL SELECT 'projects', name, "notnull" FROM pragma_table_info('projects')
-  UNION ALL SELECT 'project_translations', name, "notnull" FROM pragma_table_info('project_translations')
-  UNION ALL SELECT 'project_media', name, "notnull" FROM pragma_table_info('project_media')
-  UNION ALL SELECT 'enquiries', name, "notnull" FROM pragma_table_info('enquiries')
-  UNION ALL SELECT 'enquiry_rate_limits', name, "notnull" FROM pragma_table_info('enquiry_rate_limits')
-  UNION ALL SELECT 'admin_users', name, "notnull" FROM pragma_table_info('admin_users')
-  UNION ALL SELECT 'admin_sessions', name, "notnull" FROM pragma_table_info('admin_sessions')
-  UNION ALL SELECT 'admin_setup', name, "notnull" FROM pragma_table_info('admin_setup')
-  UNION ALL SELECT 'auth_rate_limits', name, "notnull" FROM pragma_table_info('auth_rate_limits')
-  UNION ALL SELECT 'audit_logs', name, "notnull" FROM pragma_table_info('audit_logs')
-  UNION ALL SELECT 'site_content', name, "notnull" FROM pragma_table_info('site_content')
-  UNION ALL SELECT 'site_content_revisions', name, "notnull" FROM pragma_table_info('site_content_revisions')
 )
 SELECT e.table_name, e.column_name,
   CASE
-    WHEN a.column_name IS NULL THEN 'MISSING'
-    WHEN e.must_allow_null = 1 AND a.is_not_null = 1 THEN 'INCOMPATIBLE_NOT_NULL'
+    WHEN NOT EXISTS (
+      SELECT 1 FROM pragma_table_info(e.table_name) p WHERE p.name = e.column_name
+    ) THEN 'MISSING'
+    WHEN e.must_allow_null = 1 AND COALESCE((
+      SELECT p."notnull" FROM pragma_table_info(e.table_name) p WHERE p.name = e.column_name
+    ), 0) = 1 THEN 'INCOMPATIBLE_NOT_NULL'
     ELSE 'PRESENT'
   END AS result
 FROM expected e
-LEFT JOIN actual a ON a.table_name = e.table_name AND a.column_name = e.column_name
 ORDER BY e.table_name, e.column_name;
