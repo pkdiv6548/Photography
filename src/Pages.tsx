@@ -765,9 +765,9 @@ function AdminDashboardPage() {
       </section>
       <AdminHomeContentEditor />
       <AdminSecondaryContentEditor />
+      <AdminPortfolioManager />
       <div className="services-grid" style={{ marginTop: 30 }}>
-        
-        <article className="service-card"><h2>Page Content</h2><p>Homepage draft and publish editor is available above. Additional page sections are still under development.</p></article>
+        <article className="service-card"><h2>Page Content</h2><p>Homepage and other page draft/publish editors are available above.</p></article>
       </div>
     </div>}
   </SiteFrame>;
