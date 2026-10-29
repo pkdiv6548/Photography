@@ -599,7 +599,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       const count = await env.DB.prepare(
         "SELECT status, COUNT(*) AS count FROM enquiries GROUP BY status"
       ).all<{ status: string; count: number }>();
-      return json({ enquiries: result.results ?? [], counts: count.results ?? [], limit, offset });
+      return json({ enquiries: result.results ?? [], counts: count.results ?? [], allowedStatuses, limit, offset });
     } catch {
       return json({ error: "enquiries_unavailable" }, 503);
     }
