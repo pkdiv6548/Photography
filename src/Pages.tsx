@@ -753,7 +753,7 @@ function AdminPortfolioManager({ canPublish }: { canPublish: boolean }) {
         <a href={item.preview_url} target="_blank" rel="noopener noreferrer" style={{ overflowWrap: "anywhere" }}>{item.preview_url}</a>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
           <input aria-label="Replacement HTTPS media URL" type="url" placeholder="Replacement HTTPS URL" value={replacementUrls[item.id] || ""} onChange={e => setReplacementUrls(current => ({ ...current, [item.id]: e.target.value }))} style={{ flex: "1 1 280px", padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
-          <button className="button button-outline" type="button" disabled={saving || !replacementUrls[item.id]} onClick={() => void replaceMedia(item)}>Replace URL</button>
+          <button className="button button-outline" type="button" disabled={saving || !replacementUrls[item.id] || (!canPublish && item.is_public === 1)} onClick={() => void replaceMedia(item)}>Replace URL</button>
           {item.is_public === 1 && canPublish && <button className="button button-outline" type="button" disabled={saving} onClick={() => void hideMedia(item)}>Hide</button>}
         </div>
       </article>)}
@@ -805,6 +805,7 @@ type AdminSystemStatusData = {
   adminSetupSecretConfigured: boolean;
   adminSetupComplete: boolean;
   adminCount: number;
+  adminRoleSchemaReady: boolean;
   enquirySchemaReady: boolean;
   portfolioSchemaReady: boolean;
   contentTablesReady: boolean;
@@ -831,6 +832,7 @@ function AdminSystemStatus() {
   const checks = data ? [
     ["Database binding", data.databaseConfigured],
     ["Initial admin setup", data.adminSetupComplete],
+    ["Owner/editor role schema", data.adminRoleSchemaReady],
     ["Enquiry schema + consent", data.enquirySchemaReady],
     ["Portfolio schema", data.portfolioSchemaReady],
     ["CMS tables", data.contentTablesReady],
@@ -1043,7 +1045,7 @@ function AdminDashboardPage() {
       <div className="service-card" style={{ maxWidth: 900 }}>
         <LayoutDashboard size={28}/><h2>Welcome to your private workspace</h2>
         <p>Signed in as <strong>{email}</strong></p>
-        <p className="section-subtitle">Enquiry inbox is connected. Portfolio media uploads and page publishing are still under development.</p>
+        <p className="section-subtitle">Role: {adminRole}. Editors can save drafts; only the owner can publish or manage admin accounts.</p>
         <button type="button" className="button button-outline" onClick={logout}><LogOut size={15}/> Sign out</button>
       </div>
       <section style={{ marginTop: 32 }}>
@@ -1083,7 +1085,6 @@ function AdminDashboardPage() {
           </div>
         </article>)}
       </section>
-      <AdminSystemStatus />
       <AdminSystemStatus />
       <AdminHomeContentEditor canPublish={adminRole === "owner"} />
       <AdminSecondaryContentEditor canPublish={adminRole === "owner"} />
