@@ -588,3 +588,40 @@ test("initial admin setup refuses when no owner row is inserted", async () => {
   assert.equal(statements.some(query => query.includes("INSERT INTO audit_logs")), false);
   assert.equal(statements.some(query => query.includes("UPDATE admin_setup")), false);
 });
+
+
+test("readiness endpoint rejects the repository's canonical migration schema until Worker queries are reconciled", async () => {
+  const schema: Record<string, string[]> = {
+    categories: ["id", "slug", "sort_order", "is_published", "created_at"],
+    category_translations: ["category_id", "language", "name"],
+    projects: ["id", "slug", "category_id", "cover_object_key", "featured", "status", "sort_order", "event_date", "location", "created_at", "updated_at"],
+    project_translations: ["project_id", "language", "title", "description", "alt_text"],
+    media: ["id", "project_id", "object_key", "media_type", "mime_type", "size_bytes", "width", "height", "duration_seconds", "is_public_preview", "sort_order", "created_at"],
+    enquiries: ["id", "name", "email", "phone", "service", "event_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
+    enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
+    admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
+    admin_sessions: ["id", "admin_user_id", "token_hash", "expires_at"],
+    admin_setup: ["id", "completed_at"],
+    auth_rate_limits: ["rate_key", "window_started_at", "request_count"],
+    audit_logs: ["id", "admin_user_id", "action", "target_type", "target_id", "created_at"],
+    site_content: ["page_slug", "draft_json", "published_json", "status", "updated_at"],
+    site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "created_at"]
+  };
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() {
+          const match = query.match(/PRAGMA table_info\(([^)]+)\)/);
+          if (match) return { success: true, results: (schema[match[1]] ?? []).map(name => ({ name })) as T[] };
+          return { success: true, results: [] as T[] };
+        }
+      };
+    }
+  };
+  const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "database_schema_incompatible" });
+});
