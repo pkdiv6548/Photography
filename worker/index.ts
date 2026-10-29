@@ -19,9 +19,25 @@ interface StaticAssetsBinding {
   fetch(request: Request): Promise<Response>;
 }
 
+interface R2ObjectBody {
+  body: ReadableStream<Uint8Array>;
+  httpMetadata?: { contentType?: string };
+  httpEtag?: string;
+}
+
+interface R2BucketBinding {
+  put(key: string, value: ReadableStream<Uint8Array> | ArrayBuffer, options?: {
+    httpMetadata?: { contentType?: string };
+    customMetadata?: Record<string, string>;
+  }): Promise<unknown>;
+  get(key: string): Promise<R2ObjectBody | null>;
+  delete(key: string): Promise<void>;
+}
+
 interface Env {
   DB?: D1Binding;
   ASSETS?: StaticAssetsBinding;
+  MEDIA_BUCKET?: R2BucketBinding;
   ADMIN_SETUP_SECRET?: string;
 }
 
@@ -353,19 +369,48 @@ async function supportedEnquiryStatuses(db: D1Binding): Promise<string[]> {
 }
 
 
+
+async function hasValidMediaSignature(file: File): Promise<boolean> {
+  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const starts = (signature: number[]) => signature.every((value, index) => bytes[index] === value);
+  const asciiAt = (text: string, offset: number) =>
+    text.split("").every((character, index) => bytes[offset + index] === character.charCodeAt(0));
+  switch (file.type.toLowerCase()) {
+    case "image/jpeg": return starts([0xff, 0xd8, 0xff]);
+    case "image/png": return starts([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    case "image/gif": return asciiAt("GIF87a", 0) || asciiAt("GIF89a", 0);
+    case "image/webp": return asciiAt("RIFF", 0) && asciiAt("WEBP", 8);
+    case "video/mp4": return asciiAt("ftyp", 4);
+    case "video/webm": return starts([0x1a, 0x45, 0xdf, 0xa3]);
+    default: return false;
+  }
+}
+
 function isSafeExternalMediaUrl(value: string): boolean {
   try {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.username || url.password) return false;
     const host = url.hostname.toLowerCase();
-    if (!host || host.startsWith("[") || /^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host) || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return false;
+    const labels = host.split(".");
+    const isIpv4Literal = labels.length === 4 && labels.every(label => /^\d{1,3}$/.test(label));
+    if (!host || host.startsWith("[") || isIpv4Literal || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return false;
     if (/^(127\.|10\.|192\.168\.|169\.254\.)/.test(host)) return false;
-    const match = host.match(/^172\.(\d+)\./);
-    if (match && Number(match[1]) >= 16 && Number(match[1]) <= 31) return false;
+    const private172 = host.match(/^172\.(\d+)\./);
+    if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) return false;
     return true;
   } catch {
     return false;
   }
+}
+
+function isSafeCoverUrl(value: string): boolean {
+  if (isSafeExternalMediaUrl(value)) return true;
+  const prefix = "/api/media/projects/";
+  if (!value.startsWith(prefix)) return false;
+  const parts = value.slice(prefix.length).split("/");
+  return parts.length === 2 &&
+    /^[0-9a-f-]{36}$/i.test(parts[0]) &&
+    /^[0-9a-f-]{36}\.(?:jpg|jpeg|png|webp|gif)$/i.test(parts[1]);
 }
 
 const CONTENT_FIELDS: Record<string, Record<string, number>> = {
@@ -528,6 +573,40 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
   if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
     return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
+  }
+
+
+  if (url.pathname.startsWith("/api/media/") && request.method === "GET") {
+    if (!env.DB || !env.MEDIA_BUCKET) return json({ error: "media_storage_not_configured" }, 503);
+    let key = "";
+    try { key = decodeURIComponent(url.pathname.slice("/api/media/".length)); } catch { return json({ error: "media_not_found" }, 404); }
+    if (!/^projects\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:jpg|jpeg|png|webp|gif|mp4|webm)$/i.test(key)) {
+      return json({ error: "media_not_found" }, 404);
+    }
+    try {
+      const allowed = await env.DB.prepare(
+        "SELECT m.media_type FROM project_media m JOIN projects p ON p.id = m.project_id " +
+        "WHERE m.original_key = ? AND m.is_public = 1 AND p.status = 'published'"
+      ).bind(key).first<{ media_type: string }>();
+      if (!allowed) return json({ error: "media_not_found" }, 404);
+      const object = await env.MEDIA_BUCKET.get(key);
+      if (!object) return json({ error: "media_not_found" }, 404);
+      const extension = key.split(".").pop()?.toLowerCase() ?? "";
+      const fallbackType: Record<string, string> = {
+        jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif",
+        mp4: "video/mp4", webm: "video/webm",
+      };
+      return new Response(object.body, {
+        headers: {
+          "content-type": object.httpMetadata?.contentType || fallbackType[extension] || "application/octet-stream",
+          "cache-control": "public, max-age=31536000, immutable",
+          "etag": object.httpEtag || "",
+          "x-content-type-options": "nosniff",
+        }
+      });
+    } catch {
+      return json({ error: "media_unavailable" }, 503);
+    }
   }
 
   const adminAuthResponse = await handleAdminAuth(request, env, url);
@@ -823,7 +902,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const projectDate = cleanText(body?.projectDate, 10);
     const demoLabel = cleanText(body?.demoLabel, 80) || "Portfolio";
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || !categorySlug || !titleEn || !titleHi ||
-        !isSafeExternalMediaUrl(coverImageUrl) || !["draft", "published"].includes(status) ||
+        !isSafeCoverUrl(coverImageUrl) || !["draft", "published"].includes(status) ||
         (projectDate && !isValidDate(projectDate))) {
       return json({ error: "validation_failed" }, 400);
     }
@@ -854,6 +933,68 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       return json({ ok: true, id: project.id, slug, status });
     } catch {
       return json({ error: "project_save_unavailable" }, 503);
+    }
+  }
+
+
+  if (url.pathname === "/api/admin/projects/media/upload" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    if (!env.MEDIA_BUCKET) return json({ error: "media_storage_not_configured" }, 503);
+    const declaredLength = Number(request.headers.get("content-length") ?? "0");
+    if (declaredLength > 20 * 1024 * 1024 + 64 * 1024) return json({ error: "file_too_large" }, 413);
+    let form: FormData;
+    try { form = await request.formData(); } catch { return json({ error: "invalid_multipart_form" }, 400); }
+    const file = form.get("file");
+    const projectId = cleanText(form.get("projectId"), 80);
+    const altEn = cleanText(form.get("altEn"), 250);
+    const altHi = cleanText(form.get("altHi"), 250);
+    const sortOrder = Number(form.get("sortOrder") ?? "0");
+    const isPublic = form.get("isPublic") === "true";
+    const isCover = form.get("isCover") === "true";
+    if (!file || typeof file === "string" || !projectId) return json({ error: "validation_failed" }, 400);
+    if (file.size < 1 || file.size > 20 * 1024 * 1024) return json({ error: "file_too_large", maxBytes: 20 * 1024 * 1024 }, 413);
+    if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) return json({ error: "validation_failed" }, 400);
+    const mimeExtensions: Record<string, string> = {
+      "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
+      "video/mp4": "mp4", "video/webm": "webm",
+    };
+    const extension = mimeExtensions[file.type.toLowerCase()];
+    if (!extension) return json({ error: "unsupported_media_type", allowed: Object.keys(mimeExtensions) }, 415);
+    const mediaType = file.type.startsWith("video/") ? "video" : "image";
+    if (!await hasValidMediaSignature(file)) return json({ error: "file_signature_mismatch" }, 415);
+    try {
+      const project = await env.DB.prepare("SELECT id, status FROM projects WHERE id = ?").bind(projectId).first<{ id: string; status: string }>();
+      if (!project) return json({ error: "project_not_found" }, 404);
+      if (isCover && mediaType !== "image") return json({ error: "cover_must_be_image" }, 400);
+      if (isCover && !isPublic) return json({ error: "cover_must_be_public" }, 400);
+      const id = crypto.randomUUID();
+      const key = "projects/" + projectId + "/" + id + "." + extension;
+      await env.MEDIA_BUCKET.put(key, file.stream(), {
+        httpMetadata: { contentType: file.type.toLowerCase() },
+        customMetadata: { projectId, mediaId: id, uploadedBy: admin.id },
+      });
+      const previewUrl = "/api/media/" + key;
+      try {
+        await env.DB.prepare(
+          "INSERT INTO project_media (id, project_id, media_type, preview_url, original_key, alt_en, alt_hi, sort_order, is_public) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).bind(id, projectId, mediaType, previewUrl, key, altEn, altHi, sortOrder, isPublic ? 1 : 0).run();
+        if (isCover) {
+          await env.DB.prepare("UPDATE projects SET cover_image_url = ?, updated_at = datetime('now') WHERE id = ?")
+            .bind(previewUrl, projectId).run();
+        }
+        await env.DB.prepare(
+          "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, ?, 'media', ?)"
+        ).bind(crypto.randomUUID(), admin.id, isPublic ? "media_uploaded_public" : "media_uploaded_draft", id).run();
+      } catch (error) {
+        await env.MEDIA_BUCKET.delete(key).catch(() => undefined);
+        throw error;
+      }
+      return json({ ok: true, id, previewUrl, mediaType, isPublic, isCover }, 201);
+    } catch {
+      return json({ error: "media_upload_unavailable" }, 503);
     }
   }
 
@@ -900,10 +1041,17 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const altHi = cleanText(body?.altHi, 250);
     if (!id || !isSafeExternalMediaUrl(previewUrl)) return json({ error: "validation_failed" }, 400);
     try {
+      const current = await env.DB.prepare(
+        "SELECT project_id, preview_url FROM project_media WHERE id = ?"
+      ).bind(id).first<{ project_id: string; preview_url: string }>();
+      if (!current) return json({ error: "media_not_found" }, 404);
       const result = await env.DB.prepare(
-        "UPDATE project_media SET preview_url = ?, alt_en = ?, alt_hi = ? WHERE id = ?"
+        "UPDATE project_media SET preview_url = ?, original_key = NULL, alt_en = ?, alt_hi = ? WHERE id = ?"
       ).bind(previewUrl, altEn, altHi, id).run();
       if ((result.meta?.changes ?? 0) !== 1) return json({ error: "media_not_found" }, 404);
+      await env.DB.prepare(
+        "UPDATE projects SET cover_image_url = ?, updated_at = datetime('now') WHERE id = ? AND cover_image_url = ?"
+      ).bind(previewUrl, current.project_id, current.preview_url).run();
       await env.DB.prepare(
         "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'media_replaced', 'media', ?)"
       ).bind(crypto.randomUUID(), admin.id, id).run();
@@ -921,6 +1069,11 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const id = cleanText(body?.id, 80);
     if (!id) return json({ error: "validation_failed" }, 400);
     try {
+      const current = await env.DB.prepare(
+        "SELECT m.preview_url, p.cover_image_url FROM project_media m JOIN projects p ON p.id = m.project_id WHERE m.id = ?"
+      ).bind(id).first<{ preview_url: string; cover_image_url: string }>();
+      if (!current) return json({ error: "media_not_found" }, 404);
+      if (current.preview_url === current.cover_image_url) return json({ error: "replace_cover_before_hiding" }, 409);
       const result = await env.DB.prepare("UPDATE project_media SET is_public = 0 WHERE id = ?").bind(id).run();
       if ((result.meta?.changes ?? 0) !== 1) return json({ error: "media_not_found" }, 404);
       await env.DB.prepare(

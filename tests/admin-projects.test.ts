@@ -52,3 +52,19 @@ test("media replacement and hiding require a verified session", async () => {
     assert.deepEqual(await response.json(), { error: "unauthorized" }, path);
   }
 });
+
+test("R2 upload route requires an admin session before checking storage configuration", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/admin/projects/media/upload", {
+    method: "POST",
+    headers: { "content-type": "multipart/form-data; boundary=invalid" },
+    body: "--invalid--"
+  }), { DB: mockDb() });
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+});
+
+test("public media route fails closed when R2 is not configured", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/media/projects/00000000-0000-0000-0000-000000000000/00000000-0000-0000-0000-000000000001.jpg"), { DB: mockDb() });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "media_storage_not_configured" });
+});
