@@ -420,6 +420,23 @@ async function handleContentApi(request: Request, env: Env, url: URL): Promise<R
     }
   }
 
+  if (path === "/api/admin/content/preview" && request.method === "GET") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);
+    const page = url.searchParams.get("page") ?? "home";
+    if (!Object.prototype.hasOwnProperty.call(CONTENT_FIELDS, page)) return json({ error: "invalid_page" }, 400);
+    try {
+      const row = await env.DB.prepare(
+        "SELECT draft_json FROM site_content WHERE page_slug = ?"
+      ).bind(page).first<{ draft_json: string }>();
+      if (!row) return json({ error: "draft_not_found" }, 404);
+      const content: unknown = JSON.parse(row.draft_json);
+      return json({ page, preview: true, content: content && typeof content === "object" && !Array.isArray(content) ? content : {} });
+    } catch {
+      return json({ error: "content_preview_unavailable" }, 503);
+    }
+  }
+
   if (path === "/api/admin/content/save" && request.method === "POST") {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     const admin = await currentAdmin(request, env);

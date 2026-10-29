@@ -136,14 +136,19 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [formStatus, setFormStatus] = useState<"idle" | "sending" | "success" | "error" | "contact-required">("idle");
   const [siteContent, setSiteContent] = useState<Record<string, string>>({});
+  const isDraftPreview = new URLSearchParams(window.location.search).get("preview") === "1";
   useEffect(() => {
     let active = true;
-    fetch("/api/content?page=home", { cache: "no-store" })
-      .then(async response => response.ok ? response.json() as Promise<{ content?: Record<string, string> }> : null)
+    const endpoint = isDraftPreview ? "/api/admin/content/preview?page=home" : "/api/content?page=home";
+    fetch(endpoint, { cache: "no-store", credentials: "same-origin" })
+      .then(async response => {
+        if (isDraftPreview && response.status === 401) { window.location.replace("/login"); return null; }
+        return response.ok ? response.json() as Promise<{ content?: Record<string, string> }> : null;
+      })
       .then(data => { if (active && data?.content) setSiteContent(data.content); })
       .catch(() => undefined);
     return () => { active = false; };
-  }, []);
+  }, [isDraftPreview]);
   const contentKeys = language === "en"
     ? { heroTitle: "heroTitleEn", heroText: "heroTextEn", aboutTitle: "aboutTitleEn", aboutText: "aboutTextEn", contactTitle: "contactTitleEn", contactText: "contactTextEn" }
     : { heroTitle: "heroTitleHi", heroText: "heroTextHi", aboutTitle: "aboutTitleHi", aboutText: "aboutTextHi", contactTitle: "contactTitleHi", contactText: "contactTextHi" };
@@ -204,6 +209,7 @@ export default function App() {
 
   return (
     <div className="site-shell">
+      {isDraftPreview && <div className="demo-banner">Draft preview — unpublished homepage content</div>}
       <div className="demo-banner"><Sparkles size={14} /> {t.sampleNotice}</div>
       <header className="site-header">
         <a className="brand" href="#home" aria-label="Golden Films home">

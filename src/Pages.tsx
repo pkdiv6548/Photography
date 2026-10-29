@@ -17,6 +17,7 @@ function SiteFrame({ title, eyebrow, children }: { title: string; eyebrow: strin
       <nav className="main-nav" aria-label="Main navigation">{nav.map(([label, href]) => <a key={href} href={href}>{label}</a>)}</nav>
       <a className="button button-gold header-cta" href="/contact">Contact <ArrowRight size={15} /></a>
     </header>
+    {new URLSearchParams(window.location.search).get("preview") === "1" && <div className="demo-banner">Draft preview — unpublished page content</div>}
     <main className="section-wrap" style={{ minHeight: "68vh", paddingTop: "64px", paddingBottom: "80px" }}>
       <p className="eyebrow"><span />{eyebrow}</p><h1>{title}</h1>{children}
       <p style={{ marginTop: 48 }}><a className="button button-outline" href="/"><ArrowLeft size={16} /> Back to Home</a></p>
@@ -213,6 +214,7 @@ function AdminHomeContentEditor() {
       {message && <p role="status" className="form-notice" style={{ marginTop: 16 }}>{message}</p>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 20 }}>
         <button className="button button-outline" type="submit" disabled={saving}>{saving ? "Saving…" : "Save draft"}</button>
+        <button className="button button-outline" type="button" disabled={!saved || saving} onClick={() => window.open("/?preview=1", "_blank", "noopener,noreferrer")}>Preview draft</button>
         <button className="button button-gold" type="button" disabled={!saved || saving} onClick={publish}>{saving ? "Working…" : "Publish homepage"}</button>
       </div>
     </form>}
@@ -336,6 +338,7 @@ function AdminSecondaryContentEditor() {
       {message && <p role="status" className="form-notice" style={{ marginTop: 16 }}>{message}</p>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 20 }}>
         <button className="button button-outline" type="submit" disabled={saving}>{saving ? "Saving…" : "Save draft"}</button>
+        <button className="button button-outline" type="button" disabled={!saved || saving} onClick={() => window.open("/" + page + "?preview=1", "_blank", "noopener,noreferrer")}>Preview draft</button>
         <button className="button button-gold" type="button" disabled={!saved || saving} onClick={publish}>{saving ? "Working…" : "Publish page"}</button>
       </div>
     </form>}
@@ -344,14 +347,21 @@ function AdminSecondaryContentEditor() {
 
 function usePublishedPageContent(page: EditablePage) {
   const [content, setContent] = useState<Record<string, string>>({});
+  const isDraftPreview = new URLSearchParams(window.location.search).get("preview") === "1";
   useEffect(() => {
     let active = true;
-    fetch("/api/content?page=" + encodeURIComponent(page), { cache: "no-store" })
-      .then(async response => response.ok ? response.json() as Promise<{ content?: Record<string, string> }> : null)
+    const endpoint = isDraftPreview
+      ? "/api/admin/content/preview?page=" + encodeURIComponent(page)
+      : "/api/content?page=" + encodeURIComponent(page);
+    fetch(endpoint, { cache: "no-store", credentials: "same-origin" })
+      .then(async response => {
+        if (isDraftPreview && response.status === 401) { window.location.replace("/login"); return null; }
+        return response.ok ? response.json() as Promise<{ content?: Record<string, string> }> : null;
+      })
       .then(data => { if (active && data?.content) setContent(data.content); })
       .catch(() => undefined);
     return () => { active = false; };
-  }, [page]);
+  }, [page, isDraftPreview]);
   return content;
 }
 

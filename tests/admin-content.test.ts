@@ -46,3 +46,9 @@ test("publishing page content requires a verified session", async () => {
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), { error: "unauthorized" });
 });
+
+test("draft preview endpoint requires a verified admin session", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/admin/content/preview?page=home"), { DB: mockDb() });
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+});
