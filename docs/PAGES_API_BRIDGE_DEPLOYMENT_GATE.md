@@ -69,3 +69,15 @@ The backup/restore gate remains blocked: no verified SQL export has been downloa
 ## Current state
 
 The bridge is in a draft PR. No Pages bindings were changed, no Worker was deployed, no secret was configured, no R2 bucket was created, and no production D1 migration was applied.
+
+## Operator decision — 2026-10-29 (P0 continuation)
+
+The operator has explicitly chosen **not to create a backup at this time**. Until that decision changes:
+
+- Do not start a D1 export, backup, restore, Time Travel restore, or production migration.
+- Do not bind the production D1 database to a preview deployment just to make preview readiness pass; preview write-capable routes could affect live data.
+- Do not merge or enable the Pages API bridge in production while the schema and runtime binding gates remain unverified.
+- Continue only with repository-level checks, code/test improvements, read-only configuration inspection, and isolated synthetic tests that do not connect to production.
+- Keep the production site on its existing deployment until a safe database migration path is explicitly approved.
+
+This decision does not count as backup/restore progress; that gate remains at its prior status and is intentionally paused.
