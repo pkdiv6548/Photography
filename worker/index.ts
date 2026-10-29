@@ -374,14 +374,26 @@ function isSafeExternalMediaUrl(value: string): boolean {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.username || url.password) return false;
     const host = url.hostname.toLowerCase();
-    if (!host || host.startsWith("[") || /^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host) || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return false;
-    if (/^(127\.|10\.|192\.168\.|169\.254\.)/.test(host)) return false;
-    const match = host.match(/^172\.(\d+)\./);
-    if (match && Number(match[1]) >= 16 && Number(match[1]) <= 31) return false;
+    const labels = host.split(".");
+    const isIpv4Literal = labels.length === 4 && labels.every(label => /^\\d{1,3}$/.test(label));
+    if (!host || host.startsWith("[") || isIpv4Literal || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return false;
+    if (/^(127\\.|10\\.|192\\.168\\.|169\\.254\\.)/.test(host)) return false;
+    const private172 = host.match(/^172\\.(\\d+)\\./);
+    if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) return false;
     return true;
   } catch {
     return false;
   }
+}
+
+function isSafeCoverUrl(value: string): boolean {
+  if (isSafeExternalMediaUrl(value)) return true;
+  const prefix = "/api/media/projects/";
+  if (!value.startsWith(prefix)) return false;
+  const parts = value.slice(prefix.length).split("/");
+  return parts.length === 2 &&
+    /^[0-9a-f-]{36}$/i.test(parts[0]) &&
+    /^[0-9a-f-]{36}\\.(?:jpg|jpeg|png|webp|gif)$/i.test(parts[1]);
 }
 
 const CONTENT_FIELDS: Record<string, Record<string, number>> = {
@@ -873,7 +885,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const projectDate = cleanText(body?.projectDate, 10);
     const demoLabel = cleanText(body?.demoLabel, 80) || "Portfolio";
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || !categorySlug || !titleEn || !titleHi ||
-        !(isSafeExternalMediaUrl(coverImageUrl) || /^\\/api\\/media\\/projects\\/[0-9a-f-]{36}\\/[0-9a-f-]{36}\\.(?:jpg|jpeg|png|webp|gif)$/i.test(coverImageUrl)) || !["draft", "published"].includes(status) ||
+        !isSafeCoverUrl(coverImageUrl) || !["draft", "published"].includes(status) ||
         (projectDate && !isValidDate(projectDate))) {
       return json({ error: "validation_failed" }, 400);
     }
@@ -910,9 +922,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
   if (url.pathname === "/api/admin/projects/media/upload" && request.method === "POST") {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
-    if (!env.MEDIA_BUCKET) return json({ error: "media_storage_not_configured" }, 503);
     const admin = await currentAdmin(request, env);
     if (!admin) return json({ error: "unauthorized" }, 401);
+    if (!env.MEDIA_BUCKET) return json({ error: "media_storage_not_configured" }, 503);
     const declaredLength = Number(request.headers.get("content-length") ?? "0");
     if (declaredLength > 20 * 1024 * 1024 + 64 * 1024) return json({ error: "file_too_large" }, 413);
     let form: FormData;
