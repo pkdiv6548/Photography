@@ -792,7 +792,10 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         "ORDER BY p.updated_at DESC LIMIT 100"
       ).all();
       const categories = await env.DB.prepare("SELECT slug, title_en, title_hi FROM categories ORDER BY sort_order, title_en").all();
-      return json({ projects: result.results ?? [], categories: categories.results ?? [] });
+      const media = await env.DB.prepare(
+        "SELECT id, project_id, media_type, preview_url, alt_en, alt_hi, sort_order, is_public, created_at FROM project_media ORDER BY project_id, sort_order"
+      ).all();
+      return json({ projects: result.results ?? [], categories: categories.results ?? [], media: media.results ?? [] });
     } catch {
       return json({ error: "projects_unavailable" }, 503);
     }
