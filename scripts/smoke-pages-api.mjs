@@ -49,8 +49,8 @@ const checks = [
       if (!body || typeof body !== "object" || Array.isArray(body)) {
         throw new Error("expected a JSON object");
       }
-      if (body.status !== "ready") {
-        throw new Error(`expected status="ready", got ${JSON.stringify(body.status)}`);
+      if (body.status !== "ready" || body.schema !== "legacy-compatible") {
+        throw new Error(`expected a ready legacy-compatible schema, got ${JSON.stringify(body)}`);
       }
     },
   },
@@ -76,6 +76,12 @@ for (const check of checks) {
       redirect: "error",
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (response.headers.get("x-content-type-options") !== "nosniff") {
+      throw new Error("missing X-Content-Type-Options: nosniff");
+    }
+    if (response.headers.get("cache-control") !== "no-store") {
+      throw new Error("missing Cache-Control: no-store");
+    }
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.toLowerCase().includes("application/json")) {
       throw new Error(`expected JSON content-type, got ${contentType || "(missing)"}`);
