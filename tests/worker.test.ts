@@ -270,9 +270,7 @@ test("enquiry rate limit returns 429 and does not store the sixth request", asyn
 
 test("phone-only enquiry is stored with an empty email when D1 is available", async () => {
   let storedEnquiryValues: unknown[] | undefined;
-  const schemaColumns = [
-    { name: "email", notnull: 0 }
-  ];
+  const schemaColumns = ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"].map(name => ({ name }));
   const db = {
     prepare(query: string) {
       let values: unknown[] = [];
@@ -293,6 +291,7 @@ test("phone-only enquiry is stored with an empty email when D1 is available", as
         },
         async all<T>() {
           if (query.includes("PRAGMA table_info(enquiries)")) return { success: true, results: schemaColumns as T[] };
+          if (query.includes("PRAGMA table_info(enquiry_rate_limits)")) return { success: true, results: ["ip_hash", "window_start", "request_count"].map(name => ({ name })) as T[] };
           return { success: true, results: [] as T[] };
         }
       };
