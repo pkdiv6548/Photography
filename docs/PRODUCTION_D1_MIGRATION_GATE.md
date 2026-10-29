@@ -38,3 +38,24 @@ Status: BLOCKED — do not apply migrations to production yet.
 ## Current decision
 
 Keep PR #81 open and unmerged. A successful static Pages preview and build/test run do not prove that Worker routes or D1 bindings work. No production writes or migrations have been performed as part of this validation.
+
+## Additional static audit findings (Worker SQL vs repository migrations)
+
+A read-only comparison of the SQL literals in `worker/index.ts` with migrations `0001`–`0005` found a broader contract mismatch. This must be resolved before relying on either a fresh install or a production migration:
+
+- Worker category queries expect `categories.title_en` and `categories.title_hi`; migration `0001` defines `category_translations(name, language)` instead.
+- Worker project queries and writes expect `projects.category_slug`, `cover_image_url`, `is_featured`, `project_date`, and `demo_label`; migration `0001` defines `category_id`, `cover_object_key`, `featured`, and `event_date` instead.
+- Worker project translations use `project_translations.locale`; migration `0001` defines `language`.
+- Worker media queries use table `project_media` and fields including `preview_url`, `original_key`, `alt_en`, `alt_hi`, and `is_public`; migration `0001` creates `media` with a different column contract.
+- Worker enquiry handling dynamically inspects `enquiries`, but its required consent semantics must be preserved. Never fill missing historical consent with a fabricated affirmative value.
+- Admin setup inserts `admin_users` without `role`, then login/session queries read `role`; this relies on migration `0005` having been applied. That dependency must be explicit and tested.
+- The Worker expects both `enquiry_rate_limits` and admin `auth_rate_limits`; these are separate tables and must both exist.
+
+These are not just missing-table issues: the baseline schema and current Worker use different data models. Do not attempt to fix this by blindly applying `0001`–`0005` in sequence. First choose and document one canonical schema contract, then provide a tested forward migration or update the Worker to match the canonical contract. Test on a disposable restored database with representative legacy records and verify counts/relationships before and after.
+
+## Additional required integration tests
+
+- Run a schema-contract test that extracts or enumerates all tables and columns used by Worker SQL and asserts they exist in the selected canonical schema.
+- Test a fresh database from zero using the full migration sequence and the actual Worker.
+- Test an isolated copy of the production schema separately; passing fresh-schema tests alone is insufficient.
+- Verify project/category/media joins and translation fields with representative rows, not only endpoint status codes.
