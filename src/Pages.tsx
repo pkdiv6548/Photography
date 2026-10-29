@@ -428,6 +428,11 @@ function AdminPortfolioManager() {
   const [mediaForm, setMediaForm] = useState({
     mediaType: "image", previewUrl: "", altEn: "", altHi: "", sortOrder: "0", isPublic: false
   });
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadAltEn, setUploadAltEn] = useState("");
+  const [uploadAltHi, setUploadAltHi] = useState("");
+  const [uploadIsPublic, setUploadIsPublic] = useState(false);
+  const [uploadIsCover, setUploadIsCover] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -489,6 +494,42 @@ function AdminPortfolioManager() {
       await load();
     } catch {
       setMessage("Could not add media. Use an HTTPS URL and check that the project exists.");
+    } finally { setSaving(false); }
+  };
+
+  const uploadMedia = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedProjectId || !uploadFile || saving) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const form = new FormData();
+      form.append("file", uploadFile);
+      form.append("projectId", selectedProjectId);
+      form.append("altEn", uploadAltEn);
+      form.append("altHi", uploadAltHi);
+      form.append("sortOrder", "0");
+      form.append("isPublic", String(uploadIsPublic));
+      form.append("isCover", String(uploadIsCover));
+      const response = await fetch("/api/admin/projects/media/upload", {
+        method: "POST", credentials: "same-origin", body: form
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) {
+        if (data.error === "media_storage_not_configured") throw new Error("storage_not_configured");
+        throw new Error(data.error || "upload_failed");
+      }
+      setUploadFile(null);
+      setUploadAltEn("");
+      setUploadAltHi("");
+      setUploadIsPublic(false);
+      setUploadIsCover(false);
+      setMessage("File uploaded to private object storage.");
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error && error.message === "storage_not_configured"
+        ? "Direct uploads are not active: the Cloudflare R2 bucket is not configured. URL-based media management remains available."
+        : "Upload failed. Use a supported image/video file under 20 MB and check storage configuration.");
     } finally { setSaving(false); }
   };
 
@@ -608,6 +649,28 @@ function AdminPortfolioManager() {
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}><input type="checkbox" checked={mediaForm.isPublic} onChange={e => setMediaForm({ ...mediaForm, isPublic: e.target.checked })}/> Publish this media</label>
       </div>
       <button className="button button-outline" type="submit" disabled={saving || !selectedProjectId} style={{ marginTop: 18 }}>Add media URL</button>
+    </form>
+    <form onSubmit={uploadMedia} style={{ marginTop: 28 }}>
+      <h3>Upload image or video</h3>
+      <p className="section-subtitle">Supported: JPEG, PNG, WebP, GIF, MP4 and WebM; maximum 20 MB. Upload stays disabled until an R2 bucket is configured.</p>
+      <div className="services-grid" style={{ marginTop: 16 }}>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Choose file
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" onChange={e => setUploadFile(e.target.files?.[0] ?? null)} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Alt text · English
+          <input maxLength={250} value={uploadAltEn} onChange={e => setUploadAltEn(e.target.value)} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Alt text · Hindi
+          <input maxLength={250} value={uploadAltHi} onChange={e => setUploadAltHi(e.target.value)} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+          <input type="checkbox" checked={uploadIsPublic} onChange={e => setUploadIsPublic(e.target.checked || uploadIsCover)} /> Publish this media
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+          <input type="checkbox" checked={uploadIsCover} onChange={e => { setUploadIsCover(e.target.checked); if (e.target.checked) setUploadIsPublic(true); }} /> Use as project cover (image only)
+        </label>
+      </div>
+      <button className="button button-outline" type="submit" disabled={saving || !uploadFile || !selectedProjectId} style={{ marginTop: 18 }}>{saving ? "Uploading…" : "Upload media"}</button>
     </form>
     <div style={{ marginTop: 28 }}>
       <h3>Media items</h3>
