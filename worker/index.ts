@@ -238,15 +238,15 @@ async function readAdminJson(request: Request, maxBytes = 4096): Promise<Record<
   }
 }
 
-async function currentAdmin(request: Request, env: Env): Promise<{ id: string; email: string } | null> {
+async function currentAdmin(request: Request, env: Env): Promise<{ id: string; email: string; role: "owner" | "editor" } | null> {
   if (!env.DB) return null;
   const token = cookieValue(request, "__Host-gf_admin");
   if (!token || token.length > 256) return null;
   try {
     return await env.DB.prepare(
-      "SELECT u.id, u.email FROM admin_sessions s JOIN admin_users u ON u.id = s.admin_user_id " +
+      "SELECT u.id, u.email, u.role FROM admin_sessions s JOIN admin_users u ON u.id = s.admin_user_id " +
       "WHERE s.token_hash = ? AND s.expires_at > datetime('now') AND u.is_active = 1"
-    ).bind(await sha256Hex(token)).first<{ id: string; email: string }>();
+    ).bind(await sha256Hex(token)).first<{ id: string; email: string; role: "owner" | "editor" }>();
   } catch {
     return null;
   }
@@ -301,8 +301,8 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
     if (!email || password.length < 1 || password.length > 128) return json({ error: "invalid_credentials" }, 401);
     try {
       const user = await env.DB.prepare(
-        "SELECT id, email, password_hash, password_salt FROM admin_users WHERE email = ? COLLATE NOCASE AND is_active = 1"
-      ).bind(email).first<{ id: string; email: string; password_hash: string; password_salt: string }>();
+        "SELECT id, email, password_hash, password_salt, role FROM admin_users WHERE email = ? COLLATE NOCASE AND is_active = 1"
+      ).bind(email).first<{ id: string; email: string; password_hash: string; password_salt: string; role: "owner" | "editor" }>();
       let verified = false;
       if (user) {
         try {
@@ -328,7 +328,7 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
       await env.DB.prepare(
         "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'login_success', 'admin', ?)"
       ).bind(crypto.randomUUID(), user.id, user.id).run();
-      const response = json({ ok: true, admin: { id: user.id, email: user.email } });
+      const response = json({ ok: true, admin: { id: user.id, email: user.email, role: user.role } });
       response.headers.append("set-cookie", adminCookie(token, ADMIN_SESSION_SECONDS));
       return response;
     } catch {
