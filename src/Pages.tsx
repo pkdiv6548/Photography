@@ -85,6 +85,140 @@ type AdminEnquiry = {
   updated_at: string;
 };
 
+const defaultHomeContent: Record<string, string> = {
+  heroTitleEn: "Moments into timeless stories.",
+  heroTitleHi: "पलों को यादगार कहानियों में बदलें।",
+  heroTextEn: "Photography, cinematic films and thoughtful editing for the moments and brands that matter.",
+  heroTextHi: "खास पलों और ब्रांड्स के लिए फोटोग्राफी, सिनेमैटिक फिल्में और बेहतरीन एडिटिंग।",
+  aboutTitleEn: "A story-led approach.",
+  aboutTitleHi: "हर कहानी को समझकर बनाया गया काम।",
+  aboutTextEn: "Golden Films is the creative portfolio of Sunil, bringing photography, filmmaking, photo editing and video editing together.",
+  aboutTextHi: "Golden Films, सुनील का क्रिएटिव पोर्टफोलियो है, जिसमें फोटोग्राफी, फिल्ममेकिंग, फोटो एडिटिंग और वीडियो एडिटिंग शामिल हैं।",
+  contactTitleEn: "Tell us about your story.",
+  contactTitleHi: "अपनी कहानी के बारे में बताएँ।",
+  contactTextEn: "Send your project details through the enquiry form.",
+  contactTextHi: "अपने प्रोजेक्ट की जानकारी enquiry form के ज़रिए भेजें।",
+};
+
+const homeContentFields = [
+  { key: "heroTitleEn", label: "Hero title · English", max: 120 },
+  { key: "heroTitleHi", label: "Hero title · Hindi", max: 120 },
+  { key: "heroTextEn", label: "Hero description · English", max: 500, multiline: true },
+  { key: "heroTextHi", label: "Hero description · Hindi", max: 500, multiline: true },
+  { key: "aboutTitleEn", label: "About heading · English", max: 120 },
+  { key: "aboutTitleHi", label: "About heading · Hindi", max: 120 },
+  { key: "aboutTextEn", label: "About text · English", max: 700, multiline: true },
+  { key: "aboutTextHi", label: "About text · Hindi", max: 700, multiline: true },
+  { key: "contactTitleEn", label: "Contact heading · English", max: 120 },
+  { key: "contactTitleHi", label: "Contact heading · Hindi", max: 120 },
+  { key: "contactTextEn", label: "Contact description · English", max: 500, multiline: true },
+  { key: "contactTextHi", label: "Contact description · Hindi", max: 500, multiline: true },
+] as const;
+
+function AdminHomeContentEditor() {
+  const [values, setValues] = useState<Record<string, string>>(defaultHomeContent);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/admin/content", { credentials: "same-origin", cache: "no-store" })
+      .then(async response => {
+        if (response.status === 401) {
+          window.location.replace("/login");
+          return null;
+        }
+        if (!response.ok) throw new Error("content_unavailable");
+        return response.json() as Promise<{ pages?: Array<{ page_slug: string; draft_json: string; status: string }> }>;
+      })
+      .then(data => {
+        if (!active || !data) return;
+        const home = data.pages?.find(page => page.page_slug === "home");
+        if (home) {
+          try {
+            const draft = JSON.parse(home.draft_json) as Record<string, unknown>;
+            const merged = { ...defaultHomeContent };
+            for (const key of Object.keys(merged)) if (typeof draft[key] === "string") merged[key] = draft[key] as string;
+            setValues(merged);
+            setSaved(home.status === "draft");
+          } catch { /* Keep safe defaults if stored JSON is invalid. */ }
+        }
+      })
+      .catch(() => { if (active) setMessage("Content storage is not available yet. Check the database migration before editing."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const updateValue = (key: string, value: string) => {
+    setValues(current => ({ ...current, [key]: value }));
+    setSaved(false);
+    setMessage("");
+  };
+
+  const saveDraft = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/content/save", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ page: "home", content: values })
+      });
+      if (!response.ok) throw new Error("save_failed");
+      setSaved(true);
+      setMessage("Draft saved. Publish it when you are ready.");
+    } catch {
+      setMessage("Could not save the draft. Check the database migration and try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const publish = async () => {
+    if (!saved || saving) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/content/publish", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ page: "home" })
+      });
+      if (!response.ok) throw new Error("publish_failed");
+      setMessage("Homepage content published.");
+    } catch {
+      setMessage("Could not publish. Save the draft and check the database migration.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <section className="service-card" style={{ marginTop: 30 }}>
+    <p className="eyebrow"><span/> CONTENT MANAGEMENT</p>
+    <h2>Homepage content editor</h2>
+    <p className="section-subtitle">Edit plain text in English and Hindi. Save a draft first, then publish explicitly. HTML and scripts are not accepted.</p>
+    {loading && <p className="section-subtitle">Loading saved content…</p>}
+    {!loading && <form onSubmit={saveDraft}>
+      <div className="services-grid" style={{ marginTop: 20 }}>
+        {homeContentFields.map(field => <label key={field.key} style={{ display: "grid", gap: 8, alignContent: "start", fontSize: 12 }}>
+          <span>{field.label}</span>
+          {("multiline" in field && field.multiline)
+            ? <textarea value={values[field.key]} maxLength={field.max} rows={3} onChange={event => updateValue(field.key, event.target.value)} required style={{ width: "100%", resize: "vertical", padding: 12, color: "#eee", background: "#111416", border: "1px solid #45413a" }} />
+            : <input value={values[field.key]} maxLength={field.max} onChange={event => updateValue(field.key, event.target.value)} required style={{ width: "100%", padding: 12, color: "#eee", background: "#111416", border: "1px solid #45413a" }} />}
+        </label>)}
+      </div>
+      {message && <p role="status" className="form-notice" style={{ marginTop: 16 }}>{message}</p>}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 20 }}>
+        <button className="button button-outline" type="submit" disabled={saving}>{saving ? "Saving…" : "Save draft"}</button>
+        <button className="button button-gold" type="button" disabled={!saved || saving} onClick={publish}>{saving ? "Working…" : "Publish homepage"}</button>
+      </div>
+    </form>}
+  </section>;
+}
+
 function AdminDashboardPage() {
   const [state, setState] = useState<"loading" | "authenticated" | "unauthenticated" | "error">("loading");
   const [email, setEmail] = useState("");
@@ -222,9 +356,10 @@ function AdminDashboardPage() {
           </div>
         </article>)}
       </section>
+      <AdminHomeContentEditor />
       <div className="services-grid" style={{ marginTop: 30 }}>
         <article className="service-card"><h2>Portfolio & Media</h2><p>Photo/video upload, replacement and preview — implementation pending.</p></article>
-        <article className="service-card"><h2>Page Content</h2><p>Draft, preview and publish workflow — implementation pending.</p></article>
+        <article className="service-card"><h2>Page Content</h2><p>Homepage draft and publish editor is available above. Additional page sections are still under development.</p></article>
       </div>
     </div>}
   </SiteFrame>;
