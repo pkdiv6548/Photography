@@ -71,9 +71,57 @@ function AdminLoginPage() {
   </SiteFrame>;
 }
 
+type AdminEnquiry = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  service: string;
+  event_date: string | null;
+  budget_range: string | null;
+  message: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
 function AdminDashboardPage() {
   const [state, setState] = useState<"loading" | "authenticated" | "unauthenticated" | "error">("loading");
   const [email, setEmail] = useState("");
+  const [enquiries, setEnquiries] = useState<AdminEnquiry[]>([]);
+  const [counts, setCounts] = useState<Array<{ status: string; count: number }>>([]);
+  const [allowedStatuses, setAllowedStatuses] = useState<string[]>([]);
+  const [inboxState, setInboxState] = useState<"loading" | "ready" | "error">("loading");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [savingId, setSavingId] = useState("");
+  const [actionError, setActionError] = useState("");
+
+  const loadInbox = async () => {
+    setInboxState("loading");
+    try {
+      const query = filterStatus === "all" ? "" : "?status=" + encodeURIComponent(filterStatus);
+      const response = await fetch("/api/admin/enquiries" + query, {
+        credentials: "same-origin", cache: "no-store"
+      });
+      if (response.status === 401) {
+        window.location.replace("/login");
+        return;
+      }
+      if (!response.ok) throw new Error("inbox_unavailable");
+      const data = await response.json() as {
+        enquiries: AdminEnquiry[];
+        counts: Array<{ status: string; count: number }>;
+        allowedStatuses: string[];
+      };
+      setEnquiries(data.enquiries ?? []);
+      setCounts(data.counts ?? []);
+      setAllowedStatuses(data.allowedStatuses ?? ["new"]);
+      setInboxState("ready");
+      setActionError("");
+    } catch {
+      setInboxState("error");
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -97,6 +145,30 @@ function AdminDashboardPage() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    if (state === "authenticated") void loadInbox();
+  }, [state, filterStatus]);
+
+  const updateStatus = async (enquiry: AdminEnquiry, status: string) => {
+    if (status === enquiry.status || savingId) return;
+    setSavingId(enquiry.id);
+    setActionError("");
+    try {
+      const response = await fetch("/api/admin/enquiries/status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ id: enquiry.id, status })
+      });
+      if (!response.ok) throw new Error("status_update_failed");
+      await loadInbox();
+    } catch {
+      setActionError("Could not update this enquiry. Please retry.");
+    } finally {
+      setSavingId("");
+    }
+  };
+
   const logout = async () => {
     try { await fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }); }
     finally { window.location.replace("/login"); }
@@ -107,14 +179,50 @@ function AdminDashboardPage() {
     {state === "unauthenticated" && <p className="section-subtitle">Redirecting to sign in…</p>}
     {state === "error" && <div className="service-card"><h2>Admin service unavailable</h2><p>We could not verify your session. Please try again later.</p><a className="button button-outline" href="/login">Return to login</a></div>}
     {state === "authenticated" && <div>
-      <div className="service-card" style={{ maxWidth: 760 }}>
+      <div className="service-card" style={{ maxWidth: 900 }}>
         <LayoutDashboard size={28}/><h2>Welcome to your private workspace</h2>
         <p>Signed in as <strong>{email}</strong></p>
-        <p className="section-subtitle">Authentication is connected. The enquiry inbox, portfolio editor, media uploads and publishing controls are not yet enabled.</p>
+        <p className="section-subtitle">Enquiry inbox is connected. Portfolio media uploads and page publishing are still under development.</p>
         <button type="button" className="button button-outline" onClick={logout}><LogOut size={15}/> Sign out</button>
       </div>
-      <div className="services-grid" style={{ marginTop: 24 }}>
-        <article className="service-card"><h2>Enquiries</h2><p>Private enquiry inbox and status management — implementation pending.</p></article>
+      <section style={{ marginTop: 32 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div><p className="eyebrow"><span/>PRIVATE CUSTOMER DATA</p><h2 style={{ margin: 0 }}>Project Enquiries</h2></div>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
+            Filter
+            <select value={filterStatus} onChange={event => setFilterStatus(event.target.value)} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }}>
+              <option value="all">All statuses</option>
+              {Array.from(new Set([...allowedStatuses, ...counts.map(item => item.status)])).map(status => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
+            </select>
+          </label>
+        </div>
+        {counts.length > 0 && <div className="services-grid" style={{ marginTop: 20 }}>
+          {counts.map(item => <article className="service-card" key={item.status}><p style={{ textTransform: "capitalize" }}>{item.status.replaceAll("_", " ")}</p><h2>{item.count}</h2></article>)}
+        </div>}
+        {actionError && <p role="alert" className="form-notice">{actionError}</p>}
+        {inboxState === "loading" && <p className="section-subtitle">Loading private enquiries…</p>}
+        {inboxState === "error" && <div className="service-card"><h3>Enquiry inbox unavailable</h3><p>The server could not load enquiries. Check database compatibility and try again.</p><button className="button button-outline" onClick={() => void loadInbox()}>Retry</button></div>}
+        {inboxState === "ready" && enquiries.length === 0 && <div className="service-card" style={{ marginTop: 18 }}><h3>No enquiries found</h3><p className="section-subtitle">There are no enquiries matching this filter yet.</p></div>}
+        {inboxState === "ready" && enquiries.map(enquiry => <article className="service-card" key={enquiry.id} style={{ marginTop: 18 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 12 }}>
+            <div><p className="eyebrow"><span/> {enquiry.service.replaceAll("-", " ")}</p><h3 style={{ margin: "0 0 6px" }}>{enquiry.name}</h3><p className="section-subtitle">{enquiry.created_at}</p></div>
+            <label style={{ display: "grid", alignContent: "start", gap: 6, fontSize: 12 }}>
+              Status
+              <select value={enquiry.status} disabled={savingId === enquiry.id} onChange={event => void updateStatus(enquiry, event.target.value)} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }}>
+                {allowedStatuses.map(status => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
+              </select>
+            </label>
+          </div>
+          <p style={{ lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{enquiry.message}</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, color: "#c4c0b7", fontSize: 12 }}>
+            {enquiry.email && <span>Email: {enquiry.email}</span>}
+            {enquiry.phone && <span>Phone: {enquiry.phone}</span>}
+            {enquiry.event_date && <span>Event date: {enquiry.event_date}</span>}
+            {enquiry.budget_range && <span>Budget: {enquiry.budget_range}</span>}
+          </div>
+        </article>)}
+      </section>
+      <div className="services-grid" style={{ marginTop: 30 }}>
         <article className="service-card"><h2>Portfolio & Media</h2><p>Photo/video upload, replacement and preview — implementation pending.</p></article>
         <article className="service-card"><h2>Page Content</h2><p>Draft, preview and publish workflow — implementation pending.</p></article>
       </div>
