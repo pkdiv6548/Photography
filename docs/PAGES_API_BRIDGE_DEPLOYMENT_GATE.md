@@ -47,6 +47,25 @@ After the database gate and bindings are approved:
 7. As owner, create an editor account; verify editor access can save drafts but receives 403 for publishing, public-media controls, audit logs and admin-user management.
 8. Submit a test enquiry and verify the consent field, rate limit, status, and audit data. Do not use a real visitor's data for the smoke test.
 
+
+## Latest live-schema preflight (2026-10-29)
+
+Read-only Cloudflare D1 API queries were run against the configured production database. These queries made no writes.
+
+- The live database has the legacy application tables; no `d1_migrations` table was found, so the applied migration history cannot be inferred from that table.
+- `admin_users` currently has 0 rows.
+- `admin_setup` currently has 1 row with `completed_at IS NULL`; owner setup has not been completed.
+- `enquiries.consent` is absent.
+- `site_content` and `site_content_revisions` are absent.
+- The reviewed forward migration has not been applied to production.
+- The latest Cloudflare Pages deployment on `main` is a production static deployment with `uses_functions: false`; the API bridge exists on the preview branch deployment with `uses_functions: true`.
+- The Pages project API response showed `deployment_configs.preview.env_vars` and `deployment_configs.production.env_vars` as null, while the latest deployment's `env_vars` was empty. This response alone does **not** prove whether runtime D1 bindings or secrets are configured; verify those in the Cloudflare Pages runtime/bindings configuration before calling the API gate passed.
+- Direct HTTPS smoke requests from the current execution environment could not resolve the preview hostname (DNS/network restriction). Treat API runtime checks as **not verified**, not as passing or as proof the service is down.
+
+### Current gate result
+
+The backup/restore gate remains blocked: no verified SQL export has been downloaded and restored to a disposable database. Do not run the forward migration on production, do not use Time Travel restore against production as a test, and do not merge this bridge until the required safety gates pass.
+
 ## Current state
 
 The bridge is in a draft PR. No Pages bindings were changed, no Worker was deployed, no secret was configured, no R2 bucket was created, and no production D1 migration was applied.
