@@ -1,10 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import worker from "../worker/index.ts";
 
 const token = "unit-test-editor-session";
-const tokenHash = createHash("sha256").update(token).digest("hex");
 
 function editorDb() {
   return {
