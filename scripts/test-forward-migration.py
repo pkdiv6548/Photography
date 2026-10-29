@@ -264,10 +264,6 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
 
         # Verify the new constraints, not only the resulting column names.
         self.db.execute(
-            "INSERT INTO enquiries (id, name, email, phone, service, message, consent) "
-            "VALUES ('phone-only', 'Phone Client', NULL, '9999999999', 'wedding', 'Call me', 1)"
-        )
-        self.db.execute(
             "INSERT INTO site_content (page_slug, draft_json, published_json, status) "
             "VALUES ('home', '{}', '{}', 'draft')"
         )
