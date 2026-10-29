@@ -22,6 +22,7 @@ interface StaticAssetsBinding {
 interface Env {
   DB?: D1Binding;
   ASSETS?: StaticAssetsBinding;
+  ADMIN_SETUP_SECRET?: string;
 }
 
 interface EnquiryInput {
@@ -136,6 +137,210 @@ async function enforceEnquiryRateLimit(request: Request, env: Env): Promise<Resp
   }
 }
 
+
+const ADMIN_PASSWORD_ITERATIONS = 310_000;
+const ADMIN_SESSION_SECONDS = 8 * 60 * 60;
+const AUTH_RATE_WINDOW_SECONDS = 15 * 60;
+const AUTH_RATE_MAX_ATTEMPTS = 10;
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function fromBase64Url(value: string): Uint8Array {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function deriveAdminPassword(password: string, salt: Uint8Array): Promise<string> {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: ADMIN_PASSWORD_ITERATIONS }, key, 256,
+  );
+  return toBase64Url(new Uint8Array(bits));
+}
+
+function constantTimeEqual(left: string, right: string): boolean {
+  const a = new TextEncoder().encode(left);
+  const b = new TextEncoder().encode(right);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
+  return diff === 0;
+}
+
+function cookieValue(request: Request, name: string): string {
+  for (const part of (request.headers.get("cookie") ?? "").split(";")) {
+    const separator = part.indexOf("=");
+    if (separator >= 0 && part.slice(0, separator).trim() === name) return part.slice(separator + 1).trim();
+  }
+  return "";
+}
+
+function adminCookie(token: string, maxAge: number): string {
+  return "__Host-gf_admin=" + token + "; Path=/; Max-Age=" + maxAge + "; Secure; HttpOnly; SameSite=Strict";
+}
+
+async function authRateLimited(request: Request, env: Env, purpose: string): Promise<boolean> {
+  if (!env.DB) return true;
+  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+  const key = purpose + ":" + await sha256Hex(ip);
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = Math.floor(now / AUTH_RATE_WINDOW_SECONDS) * AUTH_RATE_WINDOW_SECONDS;
+  try {
+    const row = await env.DB.prepare(
+      "INSERT INTO auth_rate_limits (rate_key, window_started_at, request_count) VALUES (?, ?, 1) " +
+      "ON CONFLICT(rate_key) DO UPDATE SET " +
+      "request_count = CASE WHEN window_started_at < ? THEN 1 ELSE request_count + 1 END, " +
+      "window_started_at = CASE WHEN window_started_at < ? THEN excluded.window_started_at ELSE window_started_at END " +
+      "RETURNING request_count"
+    ).bind(key, windowStart, windowStart, windowStart).first<{ request_count: number }>();
+    return !row || row.request_count > AUTH_RATE_MAX_ATTEMPTS;
+  } catch {
+    return true;
+  }
+}
+
+async function readAdminJson(request: Request): Promise<Record<string, unknown> | null> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.split(";")[0].trim().toLowerCase() !== "application/json") return null;
+  if (Number(request.headers.get("content-length") ?? "0") > 4096) return null;
+  const parsed = await readLimitedBody(request);
+  if (parsed.tooLarge || parsed.invalid || parsed.text === undefined || parsed.text.length > 4096) return null;
+  try {
+    const value: unknown = JSON.parse(parsed.text);
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+async function currentAdmin(request: Request, env: Env): Promise<{ id: string; email: string } | null> {
+  if (!env.DB) return null;
+  const token = cookieValue(request, "__Host-gf_admin");
+  if (!token || token.length > 256) return null;
+  try {
+    return await env.DB.prepare(
+      "SELECT u.id, u.email FROM admin_sessions s JOIN admin_users u ON u.id = s.admin_user_id " +
+      "WHERE s.token_hash = ? AND s.expires_at > datetime('now') AND u.is_active = 1"
+    ).bind(await sha256Hex(token)).first<{ id: string; email: string }>();
+  } catch {
+    return null;
+  }
+}
+
+async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Response | null> {
+  const path = url.pathname;
+  if (!["/api/admin/setup", "/api/admin/login", "/api/admin/session", "/api/admin/logout"].includes(path)) return null;
+  if (path === "/api/admin/session" ? request.method !== "GET" : request.method !== "POST") {
+    const response = json({ error: "method_not_allowed" }, 405);
+    response.headers.set("Allow", path === "/api/admin/session" ? "GET" : "POST");
+    return response;
+  }
+  if (!env.DB) return json({ error: "database_not_configured" }, 503);
+
+  if (path === "/api/admin/setup") {
+    if (!env.ADMIN_SETUP_SECRET) return json({ error: "admin_setup_not_configured" }, 503);
+    if (await authRateLimited(request, env, "setup")) return json({ error: "temporarily_unavailable" }, 429);
+    if (!constantTimeEqual(request.headers.get("x-admin-setup-secret") ?? "", env.ADMIN_SETUP_SECRET)) {
+      return json({ error: "setup_not_authorized" }, 403);
+    }
+    const body = await readAdminJson(request);
+    const email = cleanText(body?.email, 254).toLowerCase();
+    const password = typeof body?.password === "string" ? body.password : "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 14 || password.length > 128) {
+      return json({ error: "validation_failed", requirements: "Use a valid email and a 14–128 character password." }, 400);
+    }
+    const id = crypto.randomUUID();
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    try {
+      const result = await env.DB.prepare(
+        "INSERT INTO admin_users (id, email, password_hash, password_salt, is_active) " +
+        "SELECT ?, ?, ?, ?, 1 WHERE NOT EXISTS (SELECT 1 FROM admin_users) " +
+        "AND EXISTS (SELECT 1 FROM admin_setup WHERE id = 1 AND completed_at IS NULL)"
+      ).bind(id, email, await deriveAdminPassword(password, salt), toBase64Url(salt)).run();
+      if ((result.meta?.changes ?? 0) !== 1) return json({ error: "initial_setup_already_completed" }, 409);
+      await env.DB.prepare("UPDATE admin_setup SET completed_at = datetime('now') WHERE id = 1 AND completed_at IS NULL").run();
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'initial_setup', 'admin', ?)"
+      ).bind(crypto.randomUUID(), id, id).run();
+      return json({ ok: true, message: "Initial owner created. Sign in to continue." }, 201);
+    } catch {
+      return json({ error: "admin_setup_unavailable" }, 503);
+    }
+  }
+
+  if (path === "/api/admin/login") {
+    if (await authRateLimited(request, env, "login")) return json({ error: "temporarily_unavailable" }, 429);
+    const body = await readAdminJson(request);
+    const email = cleanText(body?.email, 254).toLowerCase();
+    const password = typeof body?.password === "string" ? body.password : "";
+    if (!email || password.length < 1 || password.length > 128) return json({ error: "invalid_credentials" }, 401);
+    try {
+      const user = await env.DB.prepare(
+        "SELECT id, email, password_hash, password_salt FROM admin_users WHERE email = ? COLLATE NOCASE AND is_active = 1"
+      ).bind(email).first<{ id: string; email: string; password_hash: string; password_salt: string }>();
+      let verified = false;
+      if (user) {
+        try {
+          verified = constantTimeEqual(
+            await deriveAdminPassword(password, fromBase64Url(user.password_salt)), user.password_hash,
+          );
+        } catch { verified = false; }
+      } else {
+        await deriveAdminPassword(password, new Uint8Array(16));
+      }
+      if (!user || !verified) {
+        await env.DB.prepare(
+          "INSERT INTO audit_logs (id, action, target_type, target_id) VALUES (?, 'login_failed', 'admin', ?)"
+        ).bind(crypto.randomUUID(), await sha256Hex(email)).run().catch(() => undefined);
+        return json({ error: "invalid_credentials" }, 401);
+      }
+      const token = toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+      const expiresAt = new Date(Date.now() + ADMIN_SESSION_SECONDS * 1000).toISOString().replace("T", " ").replace("Z", "");
+      await env.DB.prepare(
+        "INSERT INTO admin_sessions (id, admin_user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)"
+      ).bind(crypto.randomUUID(), user.id, await sha256Hex(token), expiresAt).run();
+      await env.DB.prepare("UPDATE admin_users SET last_login_at = datetime('now') WHERE id = ?").bind(user.id).run();
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'login_success', 'admin', ?)"
+      ).bind(crypto.randomUUID(), user.id, user.id).run();
+      const response = json({ ok: true, admin: { id: user.id, email: user.email } });
+      response.headers.append("set-cookie", adminCookie(token, ADMIN_SESSION_SECONDS));
+      return response;
+    } catch {
+      return json({ error: "admin_login_unavailable" }, 503);
+    }
+  }
+
+  if (path === "/api/admin/session") {
+    const admin = await currentAdmin(request, env);
+    return admin ? json({ authenticated: true, admin }) : json({ authenticated: false }, 401);
+  }
+
+  const admin = await currentAdmin(request, env);
+  if (!admin) return json({ error: "unauthorized" }, 401);
+  try {
+    const token = cookieValue(request, "__Host-gf_admin");
+    await env.DB.prepare("DELETE FROM admin_sessions WHERE token_hash = ?").bind(await sha256Hex(token)).run();
+    await env.DB.prepare(
+      "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'logout', 'admin', ?)"
+    ).bind(crypto.randomUUID(), admin.id, admin.id).run();
+    const response = json({ ok: true });
+    response.headers.append("set-cookie", adminCookie("", 0));
+    return response;
+  } catch {
+    return json({ error: "admin_logout_unavailable" }, 503);
+  }
+}
+
 async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const origin = request.headers.get("origin");
@@ -159,6 +364,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
     return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
   }
+
+  const adminAuthResponse = await handleAdminAuth(request, env, url);
+  if (adminAuthResponse) return adminAuthResponse;
 
   if (url.pathname === "/api/health" && request.method === "GET") {
     return json({ status: "ok", service: "golden-films-api" });
