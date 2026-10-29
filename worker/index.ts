@@ -1022,10 +1022,17 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const altHi = cleanText(body?.altHi, 250);
     if (!id || !isSafeExternalMediaUrl(previewUrl)) return json({ error: "validation_failed" }, 400);
     try {
+      const current = await env.DB.prepare(
+        "SELECT project_id, preview_url FROM project_media WHERE id = ?"
+      ).bind(id).first<{ project_id: string; preview_url: string }>();
+      if (!current) return json({ error: "media_not_found" }, 404);
       const result = await env.DB.prepare(
         "UPDATE project_media SET preview_url = ?, original_key = NULL, alt_en = ?, alt_hi = ? WHERE id = ?"
       ).bind(previewUrl, altEn, altHi, id).run();
       if ((result.meta?.changes ?? 0) !== 1) return json({ error: "media_not_found" }, 404);
+      await env.DB.prepare(
+        "UPDATE projects SET cover_image_url = ?, updated_at = datetime('now') WHERE id = ? AND cover_image_url = ?"
+      ).bind(previewUrl, current.project_id, current.preview_url).run();
       await env.DB.prepare(
         "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'media_replaced', 'media', ?)"
       ).bind(crypto.randomUUID(), admin.id, id).run();
@@ -1043,6 +1050,11 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const id = cleanText(body?.id, 80);
     if (!id) return json({ error: "validation_failed" }, 400);
     try {
+      const current = await env.DB.prepare(
+        "SELECT m.preview_url, p.cover_image_url FROM project_media m JOIN projects p ON p.id = m.project_id WHERE m.id = ?"
+      ).bind(id).first<{ preview_url: string; cover_image_url: string }>();
+      if (!current) return json({ error: "media_not_found" }, 404);
+      if (current.preview_url === current.cover_image_url) return json({ error: "replace_cover_before_hiding" }, 409);
       const result = await env.DB.prepare("UPDATE project_media SET is_public = 0 WHERE id = ?").bind(id).run();
       if ((result.meta?.changes ?? 0) !== 1) return json({ error: "media_not_found" }, 404);
       await env.DB.prepare(
