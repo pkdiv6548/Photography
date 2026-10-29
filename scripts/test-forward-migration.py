@@ -72,6 +72,21 @@ CREATE TABLE audit_logs (
 """
 
 
+# Compare pre-existing columns and values, not only row counts. The enquiries
+# table gains consent and relaxes email NOT NULL, so its legacy columns are
+# checked explicitly while the new column is tested separately.
+PRESERVATION_QUERIES = {
+    "categories": "SELECT id, slug, sort_order, title_en, title_hi, description_en, description_hi, created_at FROM categories ORDER BY id",
+    "projects": "SELECT id, slug, category_slug, cover_image_url, status, is_featured, location, project_date, demo_label, created_at, updated_at FROM projects ORDER BY id",
+    "project_translations": "SELECT project_id, locale, title, description FROM project_translations ORDER BY project_id, locale",
+    "project_media": "SELECT id, project_id, media_type, preview_url, original_key, alt_en, alt_hi, sort_order, is_public, created_at FROM project_media ORDER BY id",
+    "enquiries": "SELECT id, name, email, phone, service, preferred_date, budget_range, message, status, created_at, updated_at FROM enquiries ORDER BY id",
+    "admin_users": "SELECT id, email, password_hash, password_salt, email_verified_at, is_active, created_at, last_login_at FROM admin_users ORDER BY id",
+    "admin_sessions": "SELECT id, admin_user_id, token_hash, expires_at, created_at FROM admin_sessions ORDER BY id",
+    "audit_logs": "SELECT id, actor_id, action, target_type, target_id, details_json, created_at FROM audit_logs ORDER BY id",
+}
+
+
 class ForwardMigrationFixtureTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -87,44 +102,51 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
           INSERT INTO project_translations (project_id, locale, title, description)
           VALUES ('project-1', 'en', 'Sample', 'Description'),
                  ('project-1', 'hi', 'नमूना', 'विवरण');
-          INSERT INTO project_media (id, project_id, media_type, preview_url)
-          VALUES ('media-1', 'project-1', 'image', 'https://example.test/photo.jpg');
-          INSERT INTO enquiries (id, name, email, phone, service, message)
-          VALUES ('enquiry-1', 'Test Client', 'client@example.test', '', 'wedding', 'Please call');
-          INSERT INTO admin_users (id, email, password_hash, password_salt)
-          VALUES ('admin-1', 'owner@example.test', 'hash-placeholder', 'salt-placeholder');
+          INSERT INTO project_media (id, project_id, media_type, preview_url, original_key, alt_en, alt_hi, is_public)
+          VALUES ('media-1', 'project-1', 'image', 'https://example.test/photo.jpg', 'legacy/key.jpg', 'Sample photo', 'नमूना फोटो', 1);
+          INSERT INTO enquiries (id, name, email, phone, service, preferred_date, budget_range, message, status)
+          VALUES ('enquiry-1', 'Test Client', 'client@example.test', '9999999999', 'wedding', '2026-11-10', 'mid', 'Please call', 'read');
+          INSERT INTO admin_users (id, email, password_hash, password_salt, email_verified_at, last_login_at)
+          VALUES ('admin-1', 'owner@example.test', 'hash-placeholder', 'salt-placeholder', '2026-01-01', '2026-10-28');
           INSERT INTO admin_sessions (id, admin_user_id, token_hash, expires_at)
           VALUES ('session-1', 'admin-1', 'token-hash-placeholder', '2999-01-01 00:00:00');
-          INSERT INTO audit_logs (id, actor_id, action, target_type, target_id)
-          VALUES ('audit-1', 'admin-1', 'fixture', 'project', 'project-1');
+          INSERT INTO audit_logs (id, actor_id, action, target_type, target_id, details_json)
+          VALUES ('audit-1', 'admin-1', 'fixture', 'project', 'project-1', '{"kept":true}');
         """)
         self.db.commit()
 
     def test_forward_migration_preserves_data_and_supports_contract(self):
         before = {
-            table: self.db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-            for table in (
-                "categories", "projects", "project_translations", "project_media",
-                "enquiries", "admin_users", "admin_sessions", "audit_logs",
-            )
+            table: [tuple(row) for row in self.db.execute(query)]
+            for table, query in PRESERVATION_QUERIES.items()
         }
 
         self.db.executescript(MIGRATION.read_text(encoding="utf-8"))
 
         after = {
-            table: self.db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-            for table in before
+            table: [tuple(row) for row in self.db.execute(query)]
+            for table, query in PRESERVATION_QUERIES.items()
         }
-        self.assertEqual(after, before, "migration must preserve existing row counts")
+        self.assertEqual(
+            after,
+            before,
+            "migration must preserve existing row values, not only row counts",
+        )
 
         columns = {row["name"]: row for row in self.db.execute("PRAGMA table_info(enquiries)")}
         self.assertEqual(columns["email"]["notnull"], 0, "email must allow phone-only enquiries")
         self.assertIn("consent", columns)
+        self.assertEqual(columns["consent"]["notnull"], 1)
         self.assertEqual(
-            self.db.execute("SELECT consent FROM enquiries WHERE id='enquiry-1'").fetchone()[0],
+            self.db.execute("SELECT COUNT(*) FROM enquiries WHERE consent != 0 OR consent IS NULL").fetchone()[0],
             0,
-            "historical enquiries must not be treated as consented",
+            "all historical enquiries must receive consent=0",
         )
+
+        indexes = {
+            row["name"] for row in self.db.execute("PRAGMA index_list(enquiries)")
+        }
+        self.assertIn("idx_enquiries_status_created", indexes, "migration must recreate the enquiry index")
 
         admin_columns = {row["name"]: row for row in self.db.execute("PRAGMA table_info(admin_users)")}
         self.assertIn("role", admin_columns)
@@ -144,9 +166,8 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
           INSERT INTO enquiries (id, name, email, phone, service, message, consent)
           VALUES ('phone-only', 'Phone Client', NULL, '9999999999', 'wedding', 'Call me', 1)
         """)
-        self.assertEqual(
+        self.assertIsNone(
             self.db.execute("SELECT email FROM enquiries WHERE id='phone-only'").fetchone()[0],
-            None,
         )
         self.assertEqual(
             self.db.execute("SELECT COUNT(*) FROM project_translations WHERE project_id='project-1'").fetchone()[0],
