@@ -11,9 +11,9 @@ The following table/column names are referenced by the current `worker/index.ts`
 | Table | Required fields / contract | Used for |
 |---|---|---|
 | `categories` | `id`, `slug`, `sort_order`, `title_en`, `title_hi` | Category listing and localized labels |
-| `projects` | `id`, `slug`, `category_slug`, `cover_image_url`, `status`, `is_featured`, `project_date`, `updated_at`; some queries also use `demo_label` | Public portfolio and admin project/content operations |
+| `projects` | `id`, `slug`, `category_slug`, `cover_image_url`, `status`, `is_featured`, `project_date`, `updated_at`, `demo_label` | Public portfolio and admin project/content operations |
 | `project_translations` | `project_id`, `locale`, `title`, `description` | Localized project copy |
-| `project_media` | Worker queries refer to `preview_url`, `original_key`, `alt_en`, `alt_hi`, `is_public` plus project association/order fields | Public media and project galleries |
+| `project_media` | Readiness now requires `id`, `project_id`, `media_type`, `preview_url`, `original_key`, `alt_en`, `alt_hi`, `sort_order`, `is_public` | Public media and project galleries |
 | `enquiries` | `id`, `name`, `email`, `phone`, `service`, `preferred_date`, `budget_range`, `message`, `consent`, `status`, `created_at`, `updated_at` (some fields are inspected dynamically) | Contact/enquiry submission |
 | `enquiry_rate_limits` | `ip_hash`, `window_start`, `request_count` | Enquiry abuse prevention |
 | `admin_users` | `id`, `email`, `password_hash`, `password_salt`, `role`, `is_active` | Owner/editor authentication |
@@ -24,7 +24,7 @@ The following table/column names are referenced by the current `worker/index.ts`
 | `site_content` | `page_slug`, `draft_json`, `published_json`, `status`, `updated_at` and fields used by save/publish statements | CMS draft/published content |
 | `site_content_revisions` | `id`, `page_slug`, `content_json`, `revision_status`, `created_at` and fields used by revision writes | Content history |
 
-Before a schema is accepted, extract **all** table and column references from the Worker SQL, including conditional branches and writes; confirm foreign keys, unique constraints, indexes, nullability, and defaults too.
+The `/api/ready` endpoint checks `project_media` and `projects.demo_label` in addition to the core table/column list. This is a minimum startup guard, not a guarantee that every query will succeed. Before a schema is accepted, extract **all** table and column references from the Worker SQL, including conditional branches and writes; confirm foreign keys, unique constraints, indexes, nullability, and defaults too.
 
 ## 2. Known repository migration mismatches
 
