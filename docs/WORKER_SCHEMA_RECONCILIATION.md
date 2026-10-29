@@ -68,3 +68,24 @@ This mapping is a target for a coordinated adapter/migration change. It is **not
 - A preview environment with actual Pages/Worker routes and bindings verified before production rollout.
 
 Until that evidence exists, keep readiness fail-closed and keep both schema and admin-auth PRs unmerged.
+
+
+## Verified repository migration chain
+
+The repository's current migration directory contains these ordered files on the default branch:
+
+1. `migrations/0001_initial_schema.sql` — canonical categories/translations, projects/translations, media, and enquiries.
+2. `migrations/0002_enquiry_rate_limits.sql` — enquiry rate-limit table.
+3. `migrations/0003_admin_auth_foundation.sql` — admin authentication foundation, sessions, setup state, audit log, and auth rate limits.
+4. `migrations/0004_site_content_cms.sql` — CMS content and revision tables.
+5. `migrations/0005_admin_roles.sql` — admin role column for a fresh migration chain.
+
+This list confirms the repository files only. It does **not** prove that production applied any of them; the production database was previously reported without a `d1_migrations` history. Treat the deployed schema as unknown until a verified, read-only schema export and table/column audit are available.
+
+## Current work status
+
+- The schema mismatch and intended mappings are documented.
+- Worker conversion to the canonical schema is not complete.
+- The existing readiness checks are not a substitute for executing the endpoint SQL.
+- The migration chain must not be applied directly to the production database as a test.
+- Do not close or merge the admin-auth work until schema-backed integration tests and the preview routing check pass.
