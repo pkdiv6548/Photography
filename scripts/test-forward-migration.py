@@ -262,6 +262,38 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
         }
         self.assertIn("idx_site_content_revisions_page_created", cms_indexes)
 
+        # Verify the new constraints, not only the resulting column names.
+        self.db.execute(
+            "INSERT INTO site_content (page_slug, draft_json, published_json, status) "
+            "VALUES ('home', '{}', '{}', 'draft')"
+        )
+        self.db.execute(
+            "INSERT INTO site_content_revisions "
+            "(id, page_slug, content_json, revision_status) "
+            "VALUES ('revision-1', 'home', '{}', 'draft')"
+        )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                "INSERT INTO enquiries (id, name, email, phone, service, message, consent) "
+                "VALUES ('bad-consent', 'Client', NULL, '9999999999', 'wedding', 'Call me', 2)"
+            )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                "INSERT INTO admin_users "
+                "(id, email, password_hash, password_salt, role, is_active) "
+                "VALUES ('bad-role', 'bad-role@example.test', 'hash', 'salt', 'superuser', 1)"
+            )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                "INSERT INTO site_content (page_slug, draft_json, published_json, status) "
+                "VALUES ('unknown-page', '{}', '{}', 'draft')"
+            )
+        self.assertEqual(
+            list(self.db.execute("PRAGMA foreign_key_check")),
+            [],
+            "migration must not introduce foreign-key violations",
+        )
+
         # Worker audit inserts omit target fields for some event types; the live
         # schema defaults must permit those inserts without requiring extra fields.
         self.db.execute(
