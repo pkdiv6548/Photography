@@ -52,3 +52,19 @@ test("draft preview endpoint requires a verified admin session", async () => {
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), { error: "unauthorized" });
 });
+
+test("content revision history requires a verified admin session", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/admin/content/revisions?page=home"), { DB: mockDb() });
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+});
+
+test("restoring a content revision requires a verified admin session", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/admin/content/restore", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ revisionId: "revision-1" })
+  }), { DB: mockDb() });
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+});
