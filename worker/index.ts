@@ -950,6 +950,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       const project = await env.DB.prepare("SELECT id, status FROM projects WHERE id = ?").bind(projectId).first<{ id: string; status: string }>();
       if (!project) return json({ error: "project_not_found" }, 404);
       if (isCover && mediaType !== "image") return json({ error: "cover_must_be_image" }, 400);
+      if (isCover && !isPublic) return json({ error: "cover_must_be_public" }, 400);
       const id = crypto.randomUUID();
       const key = "projects/" + projectId + "/" + id + "." + extension;
       await env.MEDIA_BUCKET.put(key, file.stream(), {
