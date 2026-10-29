@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Aperture, ArrowDownRight, ArrowRight, Camera, Check, Clapperboard,
   Film, Image as ImageIcon, Languages, Menu, MessageCircle, Play, Send, Sparkles,
@@ -135,7 +135,28 @@ export default function App() {
   const [activeFilter, setActiveFilter] = useState<PortfolioGroup | "all">("all");
   const [menuOpen, setMenuOpen] = useState(false);
   const [formStatus, setFormStatus] = useState<"idle" | "sending" | "success" | "error" | "contact-required">("idle");
-  const t = copy[language];
+  const [siteContent, setSiteContent] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let active = true;
+    fetch("/api/content?page=home", { cache: "no-store" })
+      .then(async response => response.ok ? response.json() as Promise<{ content?: Record<string, string> }> : null)
+      .then(data => { if (active && data?.content) setSiteContent(data.content); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  const contentKeys = language === "en"
+    ? { heroTitle: "heroTitleEn", heroText: "heroTextEn", aboutTitle: "aboutTitleEn", aboutText: "aboutTextEn", contactTitle: "contactTitleEn", contactText: "contactTextEn" }
+    : { heroTitle: "heroTitleHi", heroText: "heroTextHi", aboutTitle: "aboutTitleHi", aboutText: "aboutTextHi", contactTitle: "contactTitleHi", contactText: "contactTextHi" };
+  const baseCopy = copy[language];
+  const t = {
+    ...baseCopy,
+    heroTitle: siteContent[contentKeys.heroTitle] || baseCopy.heroTitle,
+    heroText: siteContent[contentKeys.heroText] || baseCopy.heroText,
+    aboutTitle: siteContent[contentKeys.aboutTitle] || baseCopy.aboutTitle,
+    aboutText: siteContent[contentKeys.aboutText] || baseCopy.aboutText,
+    contactTitle: siteContent[contentKeys.contactTitle] || baseCopy.contactTitle,
+    contactText: siteContent[contentKeys.contactText] || baseCopy.contactText,
+  };
   const filteredCategories = useMemo(
     () => activeFilter === "all" ? categories : categories.filter((item) => item.group === activeFilter),
     [activeFilter]
