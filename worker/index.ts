@@ -1141,6 +1141,21 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  if (url.pathname === "/api/admin/audit" && request.method === "GET") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);
+    try {
+      const result = await env.DB.prepare(
+        "SELECT a.id, a.action, a.target_type, a.target_id, a.created_at, u.email AS admin_email " +
+        "FROM audit_logs a LEFT JOIN admin_users u ON u.id = a.admin_user_id " +
+        "ORDER BY a.created_at DESC LIMIT 100"
+      ).all();
+      return json({ events: result.results ?? [] });
+    } catch {
+      return json({ error: "audit_log_unavailable" }, 503);
+    }
+  }
+
   if (url.pathname.startsWith("/api/")) return json({ error: "not_found" }, 404);
   return new Response("Not found.", { status: 404 });
 }
