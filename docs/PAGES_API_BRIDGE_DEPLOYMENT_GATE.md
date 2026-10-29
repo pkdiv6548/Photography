@@ -9,6 +9,8 @@ functions/api/[[path]].ts forwards /api/* requests to the single Worker handler 
 ## 2. Database gate — do not skip
 
 1. Export the existing golden-films-db with a supported Cloudflare D1 export/backup method.
+   - **Availability warning:** Cloudflare documents that a running D1 SQL export blocks other database requests until the export completes. Do not start this export under the no-downtime requirement without first confirming a supported non-blocking backup option, or obtaining explicit approval for a planned maintenance window. Never assume the export is harmless just because it is read-only.
+   - Before any production export, confirm the current backup/time-travel options and database storage version with Cloudflare's current documentation and account configuration.
 2. Download the export and restore it to a disposable database.
 3. Run docs/forward-migrations/2026-10-29-live-schema-forward.sql against that restored copy.
 4. Verify:
