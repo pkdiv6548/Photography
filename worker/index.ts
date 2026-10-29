@@ -487,7 +487,7 @@ async function handleContentApi(request: Request, env: Env, url: URL): Promise<R
     const rawLimit = url.searchParams.get("limit") ?? "20";
     const limit = Number(rawLimit);
     if (!Object.prototype.hasOwnProperty.call(CONTENT_FIELDS, page)) return json({ error: "invalid_page" }, 400);
-    if (!/^\\d+$/.test(rawLimit) || !Number.isInteger(limit) || limit < 1 || limit > 30) {
+    if (!/^\d+$/.test(rawLimit) || !Number.isInteger(limit) || limit < 1 || limit > 30) {
       return json({ error: "invalid_limit", allowed: "1-30" }, 400);
     }
     try {
