@@ -583,6 +583,7 @@ async function handleContentApi(request: Request, env: Env, url: URL): Promise<R
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     const admin = await currentAdmin(request, env);
     if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
     const body = await readAdminJson(request);
     const page = cleanText(body?.page, 20);
     if (!Object.prototype.hasOwnProperty.call(CONTENT_FIELDS, page)) return json({ error: "invalid_page" }, 400);
@@ -962,7 +963,10 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         (projectDate && !isValidDate(projectDate))) {
       return json({ error: "validation_failed" }, 400);
     }
+    if (status === "published" && admin.role !== "owner") return json({ error: "forbidden" }, 403);
     try {
+      const existing = await env.DB.prepare("SELECT id, status FROM projects WHERE slug = ?").bind(slug).first<{ id: string; status: string }>();
+      if (existing?.status === "published" && admin.role !== "owner") return json({ error: "forbidden" }, 403);
       const category = await env.DB.prepare("SELECT slug FROM categories WHERE slug = ?").bind(categorySlug).first<{ slug: string }>();
       if (!category) return json({ error: "invalid_category" }, 400);
       const projectId = crypto.randomUUID();
@@ -1020,6 +1024,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!extension) return json({ error: "unsupported_media_type", allowed: Object.keys(mimeExtensions) }, 415);
     const mediaType = file.type.startsWith("video/") ? "video" : "image";
     if (!await hasValidMediaSignature(file)) return json({ error: "file_signature_mismatch" }, 415);
+    if ((isPublic || isCover) && admin.role !== "owner") return json({ error: "forbidden" }, 403);
     try {
       const project = await env.DB.prepare("SELECT id, status FROM projects WHERE id = ?").bind(projectId).first<{ id: string; status: string }>();
       if (!project) return json({ error: "project_not_found" }, 404);
@@ -1069,6 +1074,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         !Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) {
       return json({ error: "validation_failed" }, 400);
     }
+    if (body?.isPublic === true && admin.role !== "owner") return json({ error: "forbidden" }, 403);
     try {
       const project = await env.DB.prepare("SELECT id FROM projects WHERE id = ?").bind(projectId).first<{ id: string }>();
       if (!project) return json({ error: "project_not_found" }, 404);
@@ -1098,9 +1104,10 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!id || !isSafeExternalMediaUrl(previewUrl)) return json({ error: "validation_failed" }, 400);
     try {
       const current = await env.DB.prepare(
-        "SELECT project_id, preview_url FROM project_media WHERE id = ?"
-      ).bind(id).first<{ project_id: string; preview_url: string }>();
+        "SELECT m.project_id, m.preview_url, m.is_public, p.cover_image_url FROM project_media m JOIN projects p ON p.id = m.project_id WHERE m.id = ?"
+      ).bind(id).first<{ project_id: string; preview_url: string; is_public: number; cover_image_url: string }>();
       if (!current) return json({ error: "media_not_found" }, 404);
+      if (admin.role !== "owner" && (current.is_public === 1 || current.cover_image_url === current.preview_url)) return json({ error: "forbidden" }, 403);
       const result = await env.DB.prepare(
         "UPDATE project_media SET preview_url = ?, original_key = NULL, alt_en = ?, alt_hi = ? WHERE id = ?"
       ).bind(previewUrl, altEn, altHi, id).run();
@@ -1121,6 +1128,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     const admin = await currentAdmin(request, env);
     if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
     const body = await readAdminJson(request);
     const id = cleanText(body?.id, 80);
     if (!id) return json({ error: "validation_failed" }, 400);
@@ -1254,7 +1262,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
   if (url.pathname === "/api/admin/audit" && request.method === "GET") {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
-    if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
     try {
       const result = await env.DB.prepare(
         "SELECT a.id, a.action, a.target_type, a.target_id, a.created_at, u.email AS admin_email " +
