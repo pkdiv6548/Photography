@@ -36,6 +36,12 @@ Also, `enquiries.email` is currently `NOT NULL`, while the API supports phone-on
 
 The live schema uses the slug-based category/project/media model (`categories.title_en/title_hi`, `projects.category_slug`, `project_media`). Do not use older audit assumptions expecting `category_translations`, `projects.category_id`, or a separate media table.
 
+## Why the baseline migrations must not be applied to the live database
+
+The repository's `migrations/0001_initial_schema.sql` is for a different schema generation. It uses `CREATE TABLE IF NOT EXISTS`, which would skip existing live tables without changing their incompatible columns, but it also defines additional tables such as `category_translations` and `media`. Its indexes refer to columns such as `projects.featured`, `projects.sort_order`, and `projects.category_id`, while the live table has `is_featured` and `category_slug`. The seed statements also expect `categories.is_published`, which is absent from the live table.
+
+Consequently, applying the baseline migrations is not a safe way to bring the live database up to date: it can create unrelated tables and then fail on incompatible index/seed SQL, potentially leaving partial schema changes while no `d1_migrations` ledger exists to explain the state. Keep `migrations/0001_initial_schema.sql` through `0005_admin_roles.sql` unapplied to this database. Use only the reviewed forward migration against a verified disposable restore first.
+
 ## `audit_logs` — exact live catalog shape verified
 
 A direct read-only `sqlite_master` query and `PRAGMA table_info('audit_logs')` on 2026-10-29 captured this definition:
