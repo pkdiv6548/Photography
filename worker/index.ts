@@ -680,8 +680,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     try {
       const required: Record<string, string[]> = {
         categories: ["id", "slug", "sort_order", "title_en", "title_hi"],
-        projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at"],
+        projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at", "demo_label"],
         project_translations: ["project_id", "locale", "title", "description"],
+        project_media: ["id", "project_id", "media_type", "preview_url", "original_key", "alt_en", "alt_hi", "sort_order", "is_public"],
         enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
         enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
         admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
