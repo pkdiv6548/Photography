@@ -11,6 +11,8 @@ functions/api/[[path]].ts forwards /api/* requests to the single Worker handler 
 1. Export the existing golden-films-db with a supported Cloudflare D1 export/backup method.
    - **Availability warning:** Cloudflare documents that a running D1 SQL export blocks other database requests until the export completes. Do not start this export under the no-downtime requirement without first confirming a supported non-blocking backup option, or obtaining explicit approval for a planned maintenance window. Never assume the export is harmless just because it is read-only.
    - Before any production export, confirm the current backup/time-travel options and database storage version with Cloudflare's current documentation and account configuration.
+   - **Time Travel is not a disposable clone:** Cloudflare's Time Travel restore endpoint restores the selected point in time onto the specified database itself. Do not call restore against production to test a migration or to create a test copy; that can roll back live data. A read-only bookmark lookup is safe for inspection, but it does not produce a restorable export or clone.
+   - Cloudflare's D1 backup Workflow example automates polling and storing the export in R2; it does not remove the documented export availability limitation. Do not create an R2 bucket or paid resources without explicit approval.
 2. Download the export and restore it to a disposable database.
 3. Run docs/forward-migrations/2026-10-29-live-schema-forward.sql against that restored copy.
 4. Verify:
