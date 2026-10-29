@@ -193,7 +193,12 @@ export default function App() {
           consent: data.get("consent") === "on",
         }),
       });
-      if (!response.ok) throw new Error("Enquiry API request failed");
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!response.ok || !contentType.toLowerCase().includes("application/json")) {
+        throw new Error("Enquiry API request failed");
+      }
+      const result = await response.json() as { ok?: boolean };
+      if (result.ok !== true) throw new Error("Enquiry API did not confirm storage");
       form.reset();
       setFormStatus("success");
     } catch {
