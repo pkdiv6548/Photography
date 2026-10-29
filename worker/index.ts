@@ -341,6 +341,17 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
   }
 }
 
+
+async function supportedEnquiryStatuses(db: D1Binding): Promise<string[]> {
+  const row = await db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'enquiries'"
+  ).first<{ sql: string }>();
+  const definition = row?.sql ?? "";
+  if (definition.includes("'read'") && definition.includes("'archived'")) return ["new", "read", "archived"];
+  if (definition.includes("'in_progress'") && definition.includes("'closed'")) return ["new", "in_progress", "closed", "spam"];
+  return ["new"];
+}
+
 async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const origin = request.headers.get("origin");
@@ -564,10 +575,11 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       return json({ error: "invalid_pagination" }, 400);
     }
     const status = url.searchParams.get("status") ?? "";
-    if (status && !["new", "read", "archived"].includes(status)) {
-      return json({ error: "invalid_status", allowed: ["new", "read", "archived"] }, 400);
-    }
     try {
+      const allowedStatuses = await supportedEnquiryStatuses(env.DB);
+      if (status && !allowedStatuses.includes(status)) {
+        return json({ error: "invalid_status", allowed: allowedStatuses }, 400);
+      }
       const schema = await env.DB.prepare("PRAGMA table_info(enquiries)").all<{ name: string }>();
       const columns = new Set((schema.results ?? []).map((column) => column.name));
       const required = ["id", "name", "email", "phone", "service", "budget_range", "message", "status", "created_at", "updated_at"];
@@ -600,10 +612,11 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const body = await readAdminJson(request);
     const id = cleanText(body?.id, 80);
     const status = cleanText(body?.status, 20);
-    if (!id || !["new", "read", "archived"].includes(status)) {
-      return json({ error: "validation_failed", allowedStatuses: ["new", "read", "archived"] }, 400);
-    }
     try {
+      const allowedStatuses = await supportedEnquiryStatuses(env.DB);
+      if (!id || !allowedStatuses.includes(status)) {
+        return json({ error: "validation_failed", allowedStatuses }, 400);
+      }
       const columns = await env.DB.prepare("PRAGMA table_info(enquiries)").all<{ name: string }>();
       const available = new Set((columns.results ?? []).map((column) => column.name));
       if (!["id", "status", "updated_at"].every((column) => available.has(column))) {
