@@ -1141,6 +1141,52 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  if (url.pathname === "/api/admin/system-status" && request.method === "GET") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);
+    try {
+      const tableRows = await env.DB.prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '_cf_%'"
+      ).all<{ name: string }>();
+      const tables = new Set((tableRows.results ?? []).map(row => row.name));
+      const enquiryInfo = await env.DB.prepare("PRAGMA table_info(enquiries)").all<{ name: string }>();
+      const enquiryColumns = new Set((enquiryInfo.results ?? []).map(column => column.name));
+      const projectInfo = await env.DB.prepare("PRAGMA table_info(projects)").all<{ name: string }>();
+      const projectColumns = new Set((projectInfo.results ?? []).map(column => column.name));
+      const categoryInfo = await env.DB.prepare("PRAGMA table_info(categories)").all<{ name: string }>();
+      const categoryColumns = new Set((categoryInfo.results ?? []).map(column => column.name));
+      const adminCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM admin_users").first<{ count: number }>();
+      const setup = await env.DB.prepare("SELECT completed_at FROM admin_setup WHERE id = 1").first<{ completed_at: string | null }>();
+      const contentTablesReady = tables.has("site_content") && tables.has("site_content_revisions");
+      const portfolioSchemaReady =
+        ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured"].every(column => projectColumns.has(column)) &&
+        ["id", "slug", "title_en", "title_hi"].every(column => categoryColumns.has(column));
+      const enquirySchemaReady =
+        ["id", "name", "email", "phone", "service", "consent", "status", "created_at", "updated_at"].every(column => enquiryColumns.has(column)) &&
+        tables.has("enquiry_rate_limits");
+      return json({
+        status: "ok",
+        databaseConfigured: true,
+        adminSetupSecretConfigured: Boolean(env.ADMIN_SETUP_SECRET),
+        adminSetupComplete: Boolean(setup?.completed_at) || (adminCount?.count ?? 0) > 0,
+        adminCount: adminCount?.count ?? 0,
+        enquirySchemaReady,
+        portfolioSchemaReady,
+        contentTablesReady,
+        mediaStorageConfigured: Boolean(env.MEDIA_BUCKET),
+        blockers: [
+          ...(!env.ADMIN_SETUP_SECRET ? ["ADMIN_SETUP_SECRET is not configured"] : []),
+          ...(!enquirySchemaReady ? ["Enquiry consent/schema migration is pending"] : []),
+          ...(!portfolioSchemaReady ? ["Portfolio schema is incompatible"] : []),
+          ...(!contentTablesReady ? ["CMS content tables are missing"] : []),
+          ...(!env.MEDIA_BUCKET ? ["R2 media bucket binding is not configured"] : []),
+        ],
+      });
+    } catch {
+      return json({ error: "system_status_unavailable" }, 503);
+    }
+  }
+
   if (url.pathname === "/api/admin/audit" && request.method === "GET") {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);

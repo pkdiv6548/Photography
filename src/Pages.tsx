@@ -796,6 +796,63 @@ function AdminAuditLog() {
   </section>;
 }
 
+type AdminSystemStatusData = {
+  status: string;
+  databaseConfigured: boolean;
+  adminSetupSecretConfigured: boolean;
+  adminSetupComplete: boolean;
+  adminCount: number;
+  enquirySchemaReady: boolean;
+  portfolioSchemaReady: boolean;
+  contentTablesReady: boolean;
+  mediaStorageConfigured: boolean;
+  blockers: string[];
+};
+
+function AdminSystemStatus() {
+  const [data, setData] = useState<AdminSystemStatusData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const load = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/system-status", { credentials: "same-origin", cache: "no-store" });
+      if (response.status === 401) { window.location.replace("/login"); return; }
+      if (!response.ok) throw new Error("status_unavailable");
+      setData(await response.json() as AdminSystemStatusData);
+      setError("");
+    } catch { setError("System status unavailable. The Worker API may not be deployed or its D1 binding may be missing."); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { void load(); }, []);
+  const checks = data ? [
+    ["Database binding", data.databaseConfigured],
+    ["Initial admin setup", data.adminSetupComplete],
+    ["Enquiry schema + consent", data.enquirySchemaReady],
+    ["Portfolio schema", data.portfolioSchemaReady],
+    ["CMS tables", data.contentTablesReady],
+    ["R2 media storage", data.mediaStorageConfigured],
+    ["Setup secret", data.adminSetupSecretConfigured],
+  ] as Array<[string, boolean]> : [];
+  return <section className="service-card" style={{ marginTop: 24 }}>
+    <p className="eyebrow"><span/> DEPLOYMENT READINESS</p><h2>System status</h2>
+    <p className="section-subtitle">Read-only checks; this panel never applies migrations or changes account configuration.</p>
+    {loading && <p className="section-subtitle">Checking API and database configuration…</p>}
+    {error && <p role="status" className="form-notice">{error}</p>}
+    {data && <>
+      <div className="services-grid" style={{ marginTop: 16 }}>
+        {checks.map(([label, ready]) => <article className="service-card" key={label}>
+          <p>{label}</p><h3>{ready ? "Ready" : "Pending"}</h3>
+        </article>)}
+      </div>
+      <p className="section-subtitle">Active admin accounts: {data.adminCount}</p>
+      {data.blockers.length > 0 && <div style={{ marginTop: 16 }}><h3>Blockers</h3><ul>{data.blockers.map(blocker => <li key={blocker}>{blocker}</li>)}</ul></div>}
+      {data.blockers.length === 0 && <p className="form-notice">Required services are configured.</p>}
+    </>}
+    <button type="button" className="button button-outline" onClick={() => void load()} disabled={loading} style={{ marginTop: 16 }}>Refresh system status</button>
+  </section>;
+}
+
 function AdminDashboardPage() {
   const [state, setState] = useState<"loading" | "authenticated" | "unauthenticated" | "error">("loading");
   const [email, setEmail] = useState("");
@@ -933,6 +990,7 @@ function AdminDashboardPage() {
           </div>
         </article>)}
       </section>
+      <AdminSystemStatus />
       <AdminHomeContentEditor />
       <AdminSecondaryContentEditor />
       <AdminPortfolioManager />
