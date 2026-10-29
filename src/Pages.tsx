@@ -15,6 +15,7 @@ function SiteFrame({ title, eyebrow, children }: { title: string; eyebrow: strin
         <span className="brand-copy"><strong>GOLDEN <em>FILMS</em></strong><small>PHOTOGRAPHY · FILMS · EDITING</small></span>
       </a>
       <nav className="main-nav" aria-label="Main navigation">{nav.map(([label, href]) => <a key={href} href={href}>{label}</a>)}</nav>
+      <a className="text-link" href="/login">Admin Login</a>
       <a className="button button-gold header-cta" href="/contact">Contact <ArrowRight size={15} /></a>
     </header>
     {new URLSearchParams(window.location.search).get("preview") === "1" && <div className="demo-banner">Draft preview — unpublished page content</div>}
@@ -22,7 +23,7 @@ function SiteFrame({ title, eyebrow, children }: { title: string; eyebrow: strin
       <p className="eyebrow"><span />{eyebrow}</p><h1>{title}</h1>{children}
       <p style={{ marginTop: 48 }}><a className="button button-outline" href="/"><ArrowLeft size={16} /> Back to Home</a></p>
     </main>
-    <footer className="section-wrap" style={{ paddingTop: 24, paddingBottom: 24 }}>GOLDEN FILMS · Photography · Films · Editing</footer>
+    <footer className="section-wrap" style={{ paddingTop: 24, paddingBottom: 24 }}>GOLDEN FILMS · Photography · Films · Editing · <a href="/login">Admin Login</a> · <a href="/register">Initial Setup</a></footer>
   </div>;
 }
 

@@ -506,3 +506,9 @@ test("same-origin requests are allowed while cross-origin preflights are rejecte
   assert.deepEqual(await crossOriginPreflight.json(), { error: "origin_not_allowed" });
   assert.equal(crossOriginPreflight.headers.get("X-Frame-Options"), "DENY");
 });
+
+test("health endpoint disables caching and declares JSON content type", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/health"), emptyEnv);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.match(response.headers.get("Content-Type") ?? "", /^application\/json\s*;?/i);
+});
