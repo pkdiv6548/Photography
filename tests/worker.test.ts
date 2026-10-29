@@ -353,6 +353,7 @@ test("projects endpoint binds category slug and limit and returns published-proj
         async first<T>() { return null as T | null; },
         async run() { return { success: true, meta: { changes: 0 } }; },
         async all<T>() {
+          if (query.includes("FROM project_media")) return { success: true, results: [] as T[] };
           return { success: true, results: [{ id: "project-1", slug: "sample-wedding", category_slug: "wedding-photography", cover_image_url: "https://media.example.test/covers/sample.jpg", status: "published", is_featured: 1, location: null, project_date: null, title_en: "Sample Wedding", title_hi: null, description_en: "Sample project", description_hi: null }] as T[] };
         }
       };
@@ -366,7 +367,8 @@ test("projects endpoint binds category slug and limit and returns published-proj
   assert.match(preparedQuery, /p\.status = 'published'/);
   assert.deepEqual(boundValues, ["wedding-photography", 12]);
   assert.deepEqual(await response.json(), {
-    projects: [{ id: "project-1", slug: "sample-wedding", category_slug: "wedding-photography", cover_image_url: "https://media.example.test/covers/sample.jpg", status: "published", is_featured: 1, location: null, project_date: null, title_en: "Sample Wedding", title_hi: null, description_en: "Sample project", description_hi: null }]
+    projects: [{ id: "project-1", slug: "sample-wedding", category_slug: "wedding-photography", cover_image_url: "https://media.example.test/covers/sample.jpg", status: "published", is_featured: 1, location: null, project_date: null, title_en: "Sample Wedding", title_hi: null, description_en: "Sample project", description_hi: null }],
+    media: []
   });
 });
 
