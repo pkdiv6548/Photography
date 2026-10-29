@@ -21,6 +21,8 @@ The SQLite catalog lists these application tables:
 
 The catalog does not list `site_content` or `site_content_revisions`. `admin_users` does not yet have `role`; `enquiries` does not yet have `consent`. A read-only catalog query returned 12 application tables under the repository's counting convention excluding Cloudflare's internal `_cf_KV`; the raw query listed 12 application tables plus `_cf_KV`.
 
+A separate read-only catalog query found **no `d1_migrations` table and no table names containing `migration`**. That means the current database catalog provides no evidence of Wrangler's migration ledger; it does not prove that no manual changes were ever applied. Do not assume the baseline migration history is synchronized with this database.
+
 ## Worker contract gaps confirmed by direct inspection
 
 The current Worker readiness contract requires these pieces, which are absent from the live database:
@@ -49,7 +51,7 @@ CREATE TABLE audit_logs (
 )
 ```
 
-The table has `admin_user_id`; it does **not** have `actor_id` or `details_json`. The Worker uses `admin_user_id`, so the previously suspected production/Worker column mismatch is not present in the current catalog. The earlier SQLite fixture was wrong: it modeled `actor_id` and `details_json`. A follow-up test-only change is aligning that fixture with this verified audit-log definition. The Worker sometimes omits `target_type` and `target_id`; their empty-string defaults permit those inserts.
+The table has `admin_user_id`; it does **not** have `actor_id` or `details_json`. The Worker uses `admin_user_id`, so the previously suspected production/Worker column mismatch is not present in the current catalog. PR #73 corrected the test fixture to match this verified audit-log definition. The Worker sometimes omits `target_type` and `target_id`; their empty-string defaults permit those inserts.
 
 This inspection confirms the table definition only. No audit-log row contents were read, no production records were changed, and it does not establish that the complete API bridge is ready to deploy.
 
@@ -59,14 +61,16 @@ This inspection confirms the table definition only. No audit-log row contents we
 2. Download the generated SQL and restore it to a disposable database. Verify the file, schema, and row counts against the source catalog.
 3. Apply the exact candidate forward migration only to that disposable copy.
 4. Run `scripts/verify-d1-migration.sql`, `scripts/audit-d1-schema.sql`, Worker regression tests, and `GET /api/ready` against the migrated test copy. Confirm existing categories, projects, translations, media, admin records, audit logs, and enquiries are preserved; historical consent must remain `0`.
-5. Review the test evidence and obtain explicit approval before any production D1 write.
-6. Only after database compatibility is established, configure Pages D1 binding `DB` and secret `ADMIN_SETUP_SECRET` for preview and production, then review/merge the API bridge and run the documented smoke tests.
-7. Configure `MEDIA_BUCKET` only if uploads are explicitly enabled and the R2 free-tier/billing implications are reviewed.
+5. Reconcile the absence of a migration ledger before choosing how the candidate migration is tracked and applied; do not apply the baseline migrations wholesale.
+6. Review the test evidence and obtain explicit approval before any production D1 write.
+7. Only after database compatibility is established, configure Pages D1 binding `DB` and secret `ADMIN_SETUP_SECRET` for preview and production, then review/merge the API bridge and run the documented smoke tests.
+8. Configure `MEDIA_BUCKET` only if uploads are explicitly enabled and the R2 free-tier/billing implications are reviewed.
 
 ## Current status
 
 - Read-only live schema inspection: complete; no writes performed.
 - Exact live `audit_logs` column definitions: verified read-only on 2026-10-29.
+- Migration ledger: no `d1_migrations` table found in the live catalog; historical/manual migration status remains unknown.
 - Candidate forward migration: handles nullable email, historical consent default, admin role, and CMS tables, but remains unverified against a real restored export.
 - Full backup/export downloaded and restore-verified: not complete.
 - Disposable restore plus exact migration/test suite: not complete.
