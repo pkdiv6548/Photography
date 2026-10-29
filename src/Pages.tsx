@@ -404,6 +404,228 @@ function ContactContentPage() {
   </SiteFrame>;
 }
 
+type AdminProject = {
+  id: string; slug: string; category_slug: string; cover_image_url: string; status: string; is_featured: number;
+  location: string | null; project_date: string | null; demo_label: string; title_en?: string; title_hi?: string;
+  description_en?: string; description_hi?: string;
+};
+type AdminProjectCategory = { slug: string; title_en: string; title_hi: string };
+type AdminProjectMedia = { id: string; project_id: string; media_type: string; preview_url: string; alt_en: string; alt_hi: string; sort_order: number; is_public: number };
+
+function AdminPortfolioManager() {
+  const [projects, setProjects] = useState<AdminProject[]>([]);
+  const [categories, setCategories] = useState<AdminProjectCategory[]>([]);
+  const [media, setMedia] = useState<AdminProjectMedia[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [replacementUrls, setReplacementUrls] = useState<Record<string, string>>({});
+  const [project, setProject] = useState({
+    slug: "", categorySlug: "", titleEn: "", titleHi: "", descriptionEn: "", descriptionHi: "",
+    coverImageUrl: "", status: "draft", isFeatured: false, location: "", projectDate: "", demoLabel: "Portfolio"
+  });
+  const [mediaForm, setMediaForm] = useState({
+    mediaType: "image", previewUrl: "", altEn: "", altHi: "", sortOrder: "0", isPublic: false
+  });
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/projects", { credentials: "same-origin", cache: "no-store" });
+      if (response.status === 401) { window.location.replace("/login"); return; }
+      if (!response.ok) throw new Error("projects_unavailable");
+      const data = await response.json() as { projects: AdminProject[]; categories: AdminProjectCategory[]; media: AdminProjectMedia[] };
+      setProjects(data.projects ?? []);
+      setCategories(data.categories ?? []);
+      setMedia(data.media ?? []);
+      setSelectedProjectId(current => current || data.projects?.[0]?.id || "");
+      setProject(current => ({ ...current, categorySlug: current.categorySlug || data.categories?.[0]?.slug || "" }));
+      setMessage("");
+    } catch {
+      setMessage("Portfolio database is unavailable. Check the schema migration and try again.");
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const saveProject = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/projects/save", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(project)
+      });
+      const data = await response.json() as { id?: string; error?: string };
+      if (!response.ok || !data.id) throw new Error(data.error || "save_failed");
+      setSelectedProjectId(data.id);
+      setMessage("Project saved. Public visitors see it only when status is Published.");
+      await load();
+    } catch {
+      setMessage("Could not save project. Check the category, HTTPS cover URL and database schema.");
+    } finally { setSaving(false); }
+  };
+
+  const addMedia = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedProjectId) { setMessage("Save a project first, then add media."); return; }
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/projects/media", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId: selectedProjectId, mediaType: mediaForm.mediaType, previewUrl: mediaForm.previewUrl,
+          altEn: mediaForm.altEn, altHi: mediaForm.altHi, sortOrder: Number(mediaForm.sortOrder), isPublic: mediaForm.isPublic
+        })
+      });
+      if (!response.ok) throw new Error("media_save_failed");
+      setMediaForm(current => ({ ...current, previewUrl: "", altEn: "", altHi: "", isPublic: false }));
+      setMessage("Hosted media URL saved.");
+      await load();
+    } catch {
+      setMessage("Could not add media. Use an HTTPS URL and check that the project exists.");
+    } finally { setSaving(false); }
+  };
+
+  const replaceMedia = async (item: AdminProjectMedia) => {
+    const previewUrl = replacementUrls[item.id]?.trim();
+    if (!previewUrl || saving) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/projects/media/replace", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: item.id, previewUrl, altEn: item.alt_en, altHi: item.alt_hi })
+      });
+      if (!response.ok) throw new Error("media_replace_failed");
+      setReplacementUrls(current => ({ ...current, [item.id]: "" }));
+      setMessage("Media URL replaced. The old hosted file was not deleted.");
+      await load();
+    } catch { setMessage("Could not replace this media URL."); }
+    finally { setSaving(false); }
+  };
+
+  const hideMedia = async (item: AdminProjectMedia) => {
+    if (saving || !window.confirm("Hide this media from the public portfolio? The external file will not be deleted.")) return;
+    setSaving(true);
+    try {
+      const response = await fetch("/api/admin/projects/media/hide", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: item.id })
+      });
+      if (!response.ok) throw new Error("media_hide_failed");
+      setMessage("Media hidden from the public portfolio.");
+      await load();
+    } catch { setMessage("Could not hide this media."); }
+    finally { setSaving(false); }
+  };
+
+  const selectedMedia = media.filter(item => item.project_id === selectedProjectId);
+  return <section className="service-card" style={{ marginTop: 30 }}>
+    <p className="eyebrow"><span/> PORTFOLIO MANAGEMENT</p><h2>Projects & hosted media</h2>
+    <p className="section-subtitle">Create draft/published portfolio projects and manage HTTPS media URLs. Direct file uploads are unavailable until R2 storage is enabled and approved.</p>
+    {loading && <p className="section-subtitle">Loading projects…</p>}
+    {!loading && <form onSubmit={saveProject}>
+      <h3 style={{ marginTop: 20 }}>Create or update project</h3>
+      <div className="services-grid" style={{ marginTop: 16 }}>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Project slug
+          <input required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={80} value={project.slug} onChange={e => setProject({ ...project, slug: e.target.value.toLowerCase() })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Category
+          <select required value={project.categorySlug} onChange={e => setProject({ ...project, categorySlug: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }}>
+            {categories.map(item => <option key={item.slug} value={item.slug}>{item.title_en}</option>)}
+          </select>
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Title · English
+          <input required maxLength={120} value={project.titleEn} onChange={e => setProject({ ...project, titleEn: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Title · Hindi
+          <input required maxLength={120} value={project.titleHi} onChange={e => setProject({ ...project, titleHi: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Cover image HTTPS URL
+          <input required type="url" value={project.coverImageUrl} onChange={e => setProject({ ...project, coverImageUrl: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Status
+          <select value={project.status} onChange={e => setProject({ ...project, status: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }}><option value="draft">Draft</option><option value="published">Published</option></select>
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Description · English
+          <textarea maxLength={2000} rows={3} value={project.descriptionEn} onChange={e => setProject({ ...project, descriptionEn: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Description · Hindi
+          <textarea maxLength={2000} rows={3} value={project.descriptionHi} onChange={e => setProject({ ...project, descriptionHi: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Location (optional)
+          <input maxLength={120} value={project.location} onChange={e => setProject({ ...project, location: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Project date (optional)
+          <input type="date" value={project.projectDate} onChange={e => setProject({ ...project, projectDate: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}><input type="checkbox" checked={project.isFeatured} onChange={e => setProject({ ...project, isFeatured: e.target.checked })}/> Feature this project</label>
+      </div>
+      <button className="button button-gold" type="submit" disabled={saving || categories.length === 0} style={{ marginTop: 18 }}>{saving ? "Saving…" : "Save project"}</button>
+    </form>}
+    <div style={{ marginTop: 28 }}>
+      <h3>Existing projects</h3>
+      {projects.length === 0 ? <p className="section-subtitle">No projects have been added yet.</p> : <div className="services-grid">{projects.map(item => <article className="service-card" key={item.id}>
+        <h3>{item.title_en || item.slug}</h3><p className="section-subtitle">{item.category_slug} · {item.status}</p><p>{item.description_en}</p>
+        <button className="button button-outline" type="button" onClick={() => {
+          setSelectedProjectId(item.id);
+          setProject({ slug: item.slug, categorySlug: item.category_slug, titleEn: item.title_en || "", titleHi: item.title_hi || "", descriptionEn: item.description_en || "", descriptionHi: item.description_hi || "", coverImageUrl: item.cover_image_url, status: item.status, isFeatured: item.is_featured === 1, location: item.location || "", projectDate: item.project_date || "", demoLabel: item.demo_label || "Portfolio" });
+        }}>Edit / manage media</button>
+      </article>)}</div>}
+    </div>
+    <form onSubmit={addMedia} style={{ marginTop: 28 }}>
+      <h3>Add hosted media URL</h3>
+      <p className="section-subtitle">Media is hidden by default unless you check Publish this media. The external source file is never deleted by this site.</p>
+      <div className="services-grid" style={{ marginTop: 16 }}>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Project
+          <select required value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }}>
+            {projects.map(item => <option key={item.id} value={item.id}>{item.title_en || item.slug}</option>)}
+          </select>
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Media type
+          <select value={mediaForm.mediaType} onChange={e => setMediaForm({ ...mediaForm, mediaType: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }}><option value="image">Image</option><option value="video">Video</option></select>
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>HTTPS media URL
+          <input required type="url" value={mediaForm.previewUrl} onChange={e => setMediaForm({ ...mediaForm, previewUrl: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Alt text · English
+          <input maxLength={250} value={mediaForm.altEn} onChange={e => setMediaForm({ ...mediaForm, altEn: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Alt text · Hindi
+          <input maxLength={250} value={mediaForm.altHi} onChange={e => setMediaForm({ ...mediaForm, altHi: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Sort order
+          <input type="number" min="0" max="10000" value={mediaForm.sortOrder} onChange={e => setMediaForm({ ...mediaForm, sortOrder: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}><input type="checkbox" checked={mediaForm.isPublic} onChange={e => setMediaForm({ ...mediaForm, isPublic: e.target.checked })}/> Publish this media</label>
+      </div>
+      <button className="button button-outline" type="submit" disabled={saving || !selectedProjectId} style={{ marginTop: 18 }}>Add media URL</button>
+    </form>
+    <div style={{ marginTop: 28 }}>
+      <h3>Media items</h3>
+      {selectedMedia.length === 0 ? <p className="section-subtitle">No media URLs are attached to this project yet.</p> : selectedMedia.map(item => <article className="service-card" key={item.id} style={{ marginTop: 12 }}>
+        <p className="section-subtitle">{item.media_type} · {item.is_public ? "Public" : "Hidden"} · sort {item.sort_order}</p>
+        <a href={item.preview_url} target="_blank" rel="noopener noreferrer" style={{ overflowWrap: "anywhere" }}>{item.preview_url}</a>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+          <input aria-label="Replacement HTTPS media URL" type="url" placeholder="Replacement HTTPS URL" value={replacementUrls[item.id] || ""} onChange={e => setReplacementUrls(current => ({ ...current, [item.id]: e.target.value }))} style={{ flex: "1 1 280px", padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+          <button className="button button-outline" type="button" disabled={saving || !replacementUrls[item.id]} onClick={() => void replaceMedia(item)}>Replace URL</button>
+          {item.is_public === 1 && <button className="button button-outline" type="button" disabled={saving} onClick={() => void hideMedia(item)}>Hide</button>}
+        </div>
+      </article>)}
+    </div>
+    {message && <p role="status" className="form-notice" style={{ marginTop: 16 }}>{message}</p>}
+    <button className="button button-outline" type="button" onClick={() => void load()} disabled={loading || saving} style={{ marginTop: 18 }}>Refresh projects</button>
+  </section>;
+}
+
 function AdminDashboardPage() {
   const [state, setState] = useState<"loading" | "authenticated" | "unauthenticated" | "error">("loading");
   const [email, setEmail] = useState("");
@@ -544,7 +766,7 @@ function AdminDashboardPage() {
       <AdminHomeContentEditor />
       <AdminSecondaryContentEditor />
       <div className="services-grid" style={{ marginTop: 30 }}>
-        <article className="service-card"><h2>Portfolio & Media</h2><p>Photo/video upload, replacement and preview — implementation pending.</p></article>
+        
         <article className="service-card"><h2>Page Content</h2><p>Homepage draft and publish editor is available above. Additional page sections are still under development.</p></article>
       </div>
     </div>}
