@@ -17,19 +17,23 @@ test("readiness endpoint fails closed when D1 is not configured", async () => {
   assert.deepEqual(await response.json(), { error: "database_not_configured" });
 });
 
-test("readiness endpoint reports ready only when the expected schema is available", async () => {
-  let checkedSchema = "";
+test("readiness endpoint accepts the required legacy-compatible schema", async () => {
+  const schema: Record<string, string[]> = {
+    categories: ["id", "slug", "sort_order", "title_en", "title_hi"],
+    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at"],
+    project_translations: ["project_id", "locale", "title", "description"],
+    enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
+    enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
+  };
   const db = {
     prepare(query: string) {
-      checkedSchema += query;
       return {
         bind(..._args: unknown[]) { return this; },
         async first<T>() { return null as T | null; },
         async run() { return { success: true, meta: { changes: 0 } }; },
         async all<T>() {
-          if (query.includes("PRAGMA table_info(enquiries)")) {
-            return { success: true, results: [{ name: "email", notnull: 0 }] as T[] };
-          }
+          const match = query.match(/PRAGMA table_info\(([^)]+)\)/);
+          if (match) return { success: true, results: (schema[match[1]] ?? []).map(name => ({ name })) as T[] };
           return { success: true, results: [] as T[] };
         }
       };
@@ -37,30 +41,17 @@ test("readiness endpoint reports ready only when the expected schema is availabl
   };
   const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "ready" });
-  assert.match(checkedSchema, /category_translations/);
-  assert.match(checkedSchema, /cover_object_key/);
-  assert.match(checkedSchema, /e\.consent/);
-  assert.match(checkedSchema, /LIMIT 0/);
+  assert.deepEqual(await response.json(), { status: "ready", schema: "legacy-compatible" });
 });
 
-test("readiness endpoint rejects a connected database with the legacy schema", async () => {
-  const db = {
-    prepare(_query: string) {
-      return {
-        bind(..._args: unknown[]) { return this; },
-        async first<T>() { return null as T | null; },
-        async run() { return { success: true, meta: { changes: 0 } }; },
-        async all<T>() { throw new Error("no such table: category_translations"); }
-      };
-    }
+test("readiness endpoint rejects a schema missing the enquiry consent column", async () => {
+  const schema: Record<string, string[]> = {
+    categories: ["id", "slug", "sort_order", "title_en", "title_hi"],
+    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at"],
+    project_translations: ["project_id", "locale", "title", "description"],
+    enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "status", "created_at", "updated_at"],
+    enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
   };
-  const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
-  assert.equal(response.status, 503);
-  assert.deepEqual(await response.json(), { error: "database_schema_incompatible" });
-});
-
-test("readiness rejects a schema where enquiries.email is NOT NULL", async () => {
   const db = {
     prepare(query: string) {
       return {
@@ -68,9 +59,8 @@ test("readiness rejects a schema where enquiries.email is NOT NULL", async () =>
         async first<T>() { return null as T | null; },
         async run() { return { success: true, meta: { changes: 0 } }; },
         async all<T>() {
-          if (query.includes("PRAGMA table_info(enquiries)")) {
-            return { success: true, results: [{ name: "email", notnull: 1 }] as T[] };
-          }
+          const match = query.match(/PRAGMA table_info\(([^)]+)\)/);
+          if (match) return { success: true, results: (schema[match[1]] ?? []).map(name => ({ name })) as T[] };
           return { success: true, results: [] as T[] };
         }
       };
