@@ -601,7 +601,12 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         ? env.DB.prepare(baseSql + "AND p.category_slug = ? ORDER BY p.is_featured DESC, p.updated_at DESC LIMIT ?").bind(category, limit)
         : env.DB.prepare(baseSql + "ORDER BY p.is_featured DESC, p.updated_at DESC LIMIT ?").bind(limit);
       const result = await query.all();
-      return json({ projects: result.results ?? [] });
+      const media = await env.DB.prepare(
+        "SELECT m.id, m.project_id, m.media_type, m.preview_url, m.alt_en, m.alt_hi, m.sort_order " +
+        "FROM project_media m JOIN projects p ON p.id = m.project_id " +
+        "WHERE p.status = 'published' AND m.is_public = 1 ORDER BY m.project_id, m.sort_order"
+      ).all();
+      return json({ projects: result.results ?? [], media: media.results ?? [] });
     } catch {
       return json({ error: "projects_unavailable" }, 503);
     }
