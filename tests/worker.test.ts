@@ -24,6 +24,13 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
     project_translations: ["project_id", "locale", "title", "description"],
     enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
     enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
+    admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
+    admin_sessions: ["id", "admin_user_id", "token_hash", "expires_at"],
+    admin_setup: ["id", "completed_at"],
+    auth_rate_limits: ["rate_key", "window_started_at", "request_count"],
+    audit_logs: ["id", "admin_user_id", "action", "target_type", "target_id", "created_at"],
+    site_content: ["page_slug", "draft_json", "published_json", "status", "updated_at"],
+    site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "created_at"],
   };
   const db = {
     prepare(query: string) {
@@ -51,6 +58,13 @@ test("readiness endpoint rejects a schema missing the enquiry consent column", a
     project_translations: ["project_id", "locale", "title", "description"],
     enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "status", "created_at", "updated_at"],
     enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
+    admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
+    admin_sessions: ["id", "admin_user_id", "token_hash", "expires_at"],
+    admin_setup: ["id", "completed_at"],
+    auth_rate_limits: ["rate_key", "window_started_at", "request_count"],
+    audit_logs: ["id", "admin_user_id", "action", "target_type", "target_id", "created_at"],
+    site_content: ["page_slug", "draft_json", "published_json", "status", "updated_at"],
+    site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "created_at"],
   };
   const db = {
     prepare(query: string) {

@@ -238,15 +238,15 @@ async function readAdminJson(request: Request, maxBytes = 4096): Promise<Record<
   }
 }
 
-async function currentAdmin(request: Request, env: Env): Promise<{ id: string; email: string } | null> {
+async function currentAdmin(request: Request, env: Env): Promise<{ id: string; email: string; role: "owner" | "editor" } | null> {
   if (!env.DB) return null;
   const token = cookieValue(request, "__Host-gf_admin");
   if (!token || token.length > 256) return null;
   try {
     return await env.DB.prepare(
-      "SELECT u.id, u.email FROM admin_sessions s JOIN admin_users u ON u.id = s.admin_user_id " +
+      "SELECT u.id, u.email, u.role FROM admin_sessions s JOIN admin_users u ON u.id = s.admin_user_id " +
       "WHERE s.token_hash = ? AND s.expires_at > datetime('now') AND u.is_active = 1"
-    ).bind(await sha256Hex(token)).first<{ id: string; email: string }>();
+    ).bind(await sha256Hex(token)).first<{ id: string; email: string; role: "owner" | "editor" }>();
   } catch {
     return null;
   }
@@ -301,8 +301,8 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
     if (!email || password.length < 1 || password.length > 128) return json({ error: "invalid_credentials" }, 401);
     try {
       const user = await env.DB.prepare(
-        "SELECT id, email, password_hash, password_salt FROM admin_users WHERE email = ? COLLATE NOCASE AND is_active = 1"
-      ).bind(email).first<{ id: string; email: string; password_hash: string; password_salt: string }>();
+        "SELECT id, email, password_hash, password_salt, role FROM admin_users WHERE email = ? COLLATE NOCASE AND is_active = 1"
+      ).bind(email).first<{ id: string; email: string; password_hash: string; password_salt: string; role: "owner" | "editor" }>();
       let verified = false;
       if (user) {
         try {
@@ -328,7 +328,7 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
       await env.DB.prepare(
         "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'login_success', 'admin', ?)"
       ).bind(crypto.randomUUID(), user.id, user.id).run();
-      const response = json({ ok: true, admin: { id: user.id, email: user.email } });
+      const response = json({ ok: true, admin: { id: user.id, email: user.email, role: user.role } });
       response.headers.append("set-cookie", adminCookie(token, ADMIN_SESSION_SECONDS));
       return response;
     } catch {
@@ -583,6 +583,7 @@ async function handleContentApi(request: Request, env: Env, url: URL): Promise<R
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     const admin = await currentAdmin(request, env);
     if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
     const body = await readAdminJson(request);
     const page = cleanText(body?.page, 20);
     if (!Object.prototype.hasOwnProperty.call(CONTENT_FIELDS, page)) return json({ error: "invalid_page" }, 400);
@@ -683,6 +684,13 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         project_translations: ["project_id", "locale", "title", "description"],
         enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
         enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
+        admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
+        admin_sessions: ["id", "admin_user_id", "token_hash", "expires_at"],
+        admin_setup: ["id", "completed_at"],
+        auth_rate_limits: ["rate_key", "window_started_at", "request_count"],
+        audit_logs: ["id", "admin_user_id", "action", "target_type", "target_id", "created_at"],
+        site_content: ["page_slug", "draft_json", "published_json", "status", "updated_at"],
+        site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "created_at"],
       };
       for (const [table, expected] of Object.entries(required)) {
         const info = await env.DB.prepare("PRAGMA table_info(" + table + ")").all<{ name: string }>();
@@ -962,7 +970,10 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         (projectDate && !isValidDate(projectDate))) {
       return json({ error: "validation_failed" }, 400);
     }
+    if (status === "published" && admin.role !== "owner") return json({ error: "forbidden" }, 403);
     try {
+      const existing = await env.DB.prepare("SELECT id, status FROM projects WHERE slug = ?").bind(slug).first<{ id: string; status: string }>();
+      if (existing?.status === "published" && admin.role !== "owner") return json({ error: "forbidden" }, 403);
       const category = await env.DB.prepare("SELECT slug FROM categories WHERE slug = ?").bind(categorySlug).first<{ slug: string }>();
       if (!category) return json({ error: "invalid_category" }, 400);
       const projectId = crypto.randomUUID();
@@ -1020,6 +1031,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!extension) return json({ error: "unsupported_media_type", allowed: Object.keys(mimeExtensions) }, 415);
     const mediaType = file.type.startsWith("video/") ? "video" : "image";
     if (!await hasValidMediaSignature(file)) return json({ error: "file_signature_mismatch" }, 415);
+    if ((isPublic || isCover) && admin.role !== "owner") return json({ error: "forbidden" }, 403);
     try {
       const project = await env.DB.prepare("SELECT id, status FROM projects WHERE id = ?").bind(projectId).first<{ id: string; status: string }>();
       if (!project) return json({ error: "project_not_found" }, 404);
@@ -1069,6 +1081,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         !Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) {
       return json({ error: "validation_failed" }, 400);
     }
+    if (body?.isPublic === true && admin.role !== "owner") return json({ error: "forbidden" }, 403);
     try {
       const project = await env.DB.prepare("SELECT id FROM projects WHERE id = ?").bind(projectId).first<{ id: string }>();
       if (!project) return json({ error: "project_not_found" }, 404);
@@ -1098,9 +1111,10 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!id || !isSafeExternalMediaUrl(previewUrl)) return json({ error: "validation_failed" }, 400);
     try {
       const current = await env.DB.prepare(
-        "SELECT project_id, preview_url FROM project_media WHERE id = ?"
-      ).bind(id).first<{ project_id: string; preview_url: string }>();
+        "SELECT m.project_id, m.preview_url, m.is_public, p.cover_image_url FROM project_media m JOIN projects p ON p.id = m.project_id WHERE m.id = ?"
+      ).bind(id).first<{ project_id: string; preview_url: string; is_public: number; cover_image_url: string }>();
       if (!current) return json({ error: "media_not_found" }, 404);
+      if (admin.role !== "owner" && (current.is_public === 1 || current.cover_image_url === current.preview_url)) return json({ error: "forbidden" }, 403);
       const result = await env.DB.prepare(
         "UPDATE project_media SET preview_url = ?, original_key = NULL, alt_en = ?, alt_hi = ? WHERE id = ?"
       ).bind(previewUrl, altEn, altHi, id).run();
@@ -1121,6 +1135,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     const admin = await currentAdmin(request, env);
     if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
     const body = await readAdminJson(request);
     const id = cleanText(body?.id, 80);
     if (!id) return json({ error: "validation_failed" }, 400);
@@ -1141,6 +1156,71 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  if (url.pathname === "/api/admin/users" && request.method === "GET") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
+    try {
+      const result = await env.DB.prepare(
+        "SELECT id, email, role, is_active, created_at, last_login_at FROM admin_users ORDER BY created_at DESC LIMIT 100"
+      ).all();
+      return json({ users: result.results ?? [] });
+    } catch {
+      return json({ error: "admin_users_unavailable" }, 503);
+    }
+  }
+
+  if (url.pathname === "/api/admin/users/create" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
+    if (await authRateLimited(request, env, "create-admin")) return json({ error: "temporarily_unavailable" }, 429);
+    const body = await readAdminJson(request);
+    const email = cleanText(body?.email, 254).toLowerCase();
+    const password = typeof body?.password === "string" ? body.password : "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 14 || password.length > 128) {
+      return json({ error: "validation_failed", requirements: "Use a valid email and a 14–128 character password." }, 400);
+    }
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    try {
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        "INSERT INTO admin_users (id, email, password_hash, password_salt, role, is_active) VALUES (?, ?, ?, ?, 'editor', 1)"
+      ).bind(id, email, await deriveAdminPassword(password, salt), toBase64Url(salt)).run();
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'admin_editor_created', 'admin', ?)"
+      ).bind(crypto.randomUUID(), admin.id, id).run();
+      return json({ ok: true, user: { id, email, role: "editor" } }, 201);
+    } catch {
+      return json({ error: "admin_user_create_unavailable" }, 503);
+    }
+  }
+
+  if (url.pathname === "/api/admin/users/disable" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
+    const body = await readAdminJson(request);
+    const id = cleanText(body?.id, 80);
+    if (!id || id === admin.id) return json({ error: "invalid_target" }, 400);
+    try {
+      const target = await env.DB.prepare("SELECT id, role FROM admin_users WHERE id = ?").bind(id).first<{ id: string; role: string }>();
+      if (!target) return json({ error: "admin_user_not_found" }, 404);
+      if (target.role !== "editor") return json({ error: "owner_cannot_be_disabled" }, 403);
+      await env.DB.prepare("UPDATE admin_users SET is_active = 0 WHERE id = ?").bind(id).run();
+      await env.DB.prepare("DELETE FROM admin_sessions WHERE admin_user_id = ?").bind(id).run();
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'admin_editor_disabled', 'admin', ?)"
+      ).bind(crypto.randomUUID(), admin.id, id).run();
+      return json({ ok: true, id, is_active: false });
+    } catch {
+      return json({ error: "admin_user_disable_unavailable" }, 503);
+    }
+  }
+
   if (url.pathname === "/api/admin/system-status" && request.method === "GET") {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);
@@ -1155,6 +1235,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       const projectColumns = new Set((projectInfo.results ?? []).map(column => column.name));
       const categoryInfo = await env.DB.prepare("PRAGMA table_info(categories)").all<{ name: string }>();
       const categoryColumns = new Set((categoryInfo.results ?? []).map(column => column.name));
+      const adminInfo = await env.DB.prepare("PRAGMA table_info(admin_users)").all<{ name: string }>();
+      const adminColumns = new Set((adminInfo.results ?? []).map(column => column.name));
+      const adminRoleSchemaReady = adminColumns.has("role");
       const adminCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM admin_users").first<{ count: number }>();
       const setup = await env.DB.prepare("SELECT completed_at FROM admin_setup WHERE id = 1").first<{ completed_at: string | null }>();
       const contentTablesReady = tables.has("site_content") && tables.has("site_content_revisions");
@@ -1169,6 +1252,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         databaseConfigured: true,
         adminSetupSecretConfigured: Boolean(env.ADMIN_SETUP_SECRET),
         adminSetupComplete: Boolean(setup?.completed_at) || (adminCount?.count ?? 0) > 0,
+        adminRoleSchemaReady,
         adminCount: adminCount?.count ?? 0,
         enquirySchemaReady,
         portfolioSchemaReady,
@@ -1176,6 +1260,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         mediaStorageConfigured: Boolean(env.MEDIA_BUCKET),
         blockers: [
           ...(!env.ADMIN_SETUP_SECRET ? ["ADMIN_SETUP_SECRET is not configured"] : []),
+          ...(!adminRoleSchemaReady ? ["Owner/editor role migration is pending"] : []),
           ...(!enquirySchemaReady ? ["Enquiry consent/schema migration is pending"] : []),
           ...(!portfolioSchemaReady ? ["Portfolio schema is incompatible"] : []),
           ...(!contentTablesReady ? ["CMS content tables are missing"] : []),
@@ -1189,7 +1274,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
   if (url.pathname === "/api/admin/audit" && request.method === "GET") {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
-    if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
     try {
       const result = await env.DB.prepare(
         "SELECT a.id, a.action, a.target_type, a.target_id, a.created_at, u.email AS admin_email " +

@@ -178,7 +178,7 @@ function AdminContentRevisionHistory({ page, onRestored }: {
   </div>;
 }
 
-function AdminHomeContentEditor() {
+function AdminHomeContentEditor({ canPublish }: { canPublish: boolean }) {
   const [values, setValues] = useState<Record<string, string>>(defaultHomeContent);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -277,7 +277,7 @@ function AdminHomeContentEditor() {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 20 }}>
         <button className="button button-outline" type="submit" disabled={saving}>{saving ? "Saving…" : "Save draft"}</button>
         <button className="button button-outline" type="button" disabled={!saved || saving} onClick={() => window.open("/?preview=1", "_blank", "noopener,noreferrer")}>Preview draft</button>
-        <button className="button button-gold" type="button" disabled={!saved || saving} onClick={publish}>{saving ? "Working…" : "Publish homepage"}</button>
+        <button className="button button-gold" type="button" disabled={!canPublish || !saved || saving} onClick={publish}>{saving ? "Working…" : canPublish ? "Publish homepage" : "Owner only"}</button>
       </div>
     </form>}
     <AdminContentRevisionHistory page="home" onRestored={content => {
@@ -317,7 +317,7 @@ const defaultSecondaryContent: Record<EditablePage, Record<string, string>> = {
   contact: { titleEn: "Contact & Project Enquiry", titleHi: "संपर्क और प्रोजेक्ट पूछताछ", textEn: "Tell us about your project and preferred contact details.", textHi: "अपने प्रोजेक्ट और संपर्क विवरण के बारे में बताएँ।" },
 };
 
-function AdminSecondaryContentEditor() {
+function AdminSecondaryContentEditor({ canPublish }: { canPublish: boolean }) {
   const [page, setPage] = useState<EditablePage>("about");
   const [values, setValues] = useState<Record<string, string>>(defaultSecondaryContent.about);
   const [loading, setLoading] = useState(true);
@@ -407,7 +407,7 @@ function AdminSecondaryContentEditor() {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 20 }}>
         <button className="button button-outline" type="submit" disabled={saving}>{saving ? "Saving…" : "Save draft"}</button>
         <button className="button button-outline" type="button" disabled={!saved || saving} onClick={() => window.open("/" + page + "?preview=1", "_blank", "noopener,noreferrer")}>Preview draft</button>
-        <button className="button button-gold" type="button" disabled={!saved || saving} onClick={publish}>{saving ? "Working…" : "Publish page"}</button>
+        <button className="button button-gold" type="button" disabled={!canPublish || !saved || saving} onClick={publish}>{saving ? "Working…" : canPublish ? "Publish page" : "Owner only"}</button>
       </div>
     </form>}
     <AdminContentRevisionHistory page={page} onRestored={content => {
@@ -486,7 +486,7 @@ type AdminProject = {
 type AdminProjectCategory = { slug: string; title_en: string; title_hi: string };
 type AdminProjectMedia = { id: string; project_id: string; media_type: string; preview_url: string; alt_en: string; alt_hi: string; sort_order: number; is_public: number };
 
-function AdminPortfolioManager() {
+function AdminPortfolioManager({ canPublish }: { canPublish: boolean }) {
   const [projects, setProjects] = useState<AdminProject[]>([]);
   const [categories, setCategories] = useState<AdminProjectCategory[]>([]);
   const [media, setMedia] = useState<AdminProjectMedia[]>([]);
@@ -668,7 +668,7 @@ function AdminPortfolioManager() {
           <input required type="url" value={project.coverImageUrl} onChange={e => setProject({ ...project, coverImageUrl: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
         </label>
         <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Status
-          <select value={project.status} onChange={e => setProject({ ...project, status: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }}><option value="draft">Draft</option><option value="published">Published</option></select>
+          <select disabled={!canPublish && project.status === "published"} value={project.status} onChange={e => setProject({ ...project, status: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }}><option value="draft">Draft</option><option value="published">Published</option></select>
         </label>
         <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Description · English
           <textarea maxLength={2000} rows={3} value={project.descriptionEn} onChange={e => setProject({ ...project, descriptionEn: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
@@ -684,7 +684,7 @@ function AdminPortfolioManager() {
         </label>
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}><input type="checkbox" checked={project.isFeatured} onChange={e => setProject({ ...project, isFeatured: e.target.checked })}/> Feature this project</label>
       </div>
-      <button className="button button-gold" type="submit" disabled={saving || categories.length === 0} style={{ marginTop: 18 }}>{saving ? "Saving…" : "Save project"}</button>
+      <button className="button button-gold" type="submit" disabled={saving || categories.length === 0 || (!canPublish && project.status === "published")} style={{ marginTop: 18 }}>{saving ? "Saving…" : "Save project"}</button>
     </form>}
     <div style={{ marginTop: 28 }}>
       <h3>Existing projects</h3>
@@ -720,7 +720,7 @@ function AdminPortfolioManager() {
         <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Sort order
           <input type="number" min="0" max="10000" value={mediaForm.sortOrder} onChange={e => setMediaForm({ ...mediaForm, sortOrder: e.target.value })} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
         </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}><input type="checkbox" checked={mediaForm.isPublic} onChange={e => setMediaForm({ ...mediaForm, isPublic: e.target.checked })}/> Publish this media</label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}><input type="checkbox" disabled={!canPublish} checked={mediaForm.isPublic} onChange={e => setMediaForm({ ...mediaForm, isPublic: e.target.checked })}/> Publish this media</label>
       </div>
       <button className="button button-outline" type="submit" disabled={saving || !selectedProjectId} style={{ marginTop: 18 }}>Add media URL</button>
     </form>
@@ -738,10 +738,10 @@ function AdminPortfolioManager() {
           <input maxLength={250} value={uploadAltHi} onChange={e => setUploadAltHi(e.target.value)} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
         </label>
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-          <input type="checkbox" checked={uploadIsPublic} onChange={e => setUploadIsPublic(e.target.checked || uploadIsCover)} /> Publish this media
+          <input type="checkbox" disabled={!canPublish} checked={uploadIsPublic} onChange={e => setUploadIsPublic(e.target.checked || uploadIsCover)} /> Publish this media
         </label>
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-          <input type="checkbox" checked={uploadIsCover} onChange={e => { setUploadIsCover(e.target.checked); if (e.target.checked) setUploadIsPublic(true); }} /> Use as project cover (image only)
+          <input type="checkbox" disabled={!canPublish} checked={uploadIsCover} onChange={e => { setUploadIsCover(e.target.checked); if (e.target.checked) setUploadIsPublic(true); }} /> Use as project cover (image only)
         </label>
       </div>
       <button className="button button-outline" type="submit" disabled={saving || !uploadFile || !selectedProjectId} style={{ marginTop: 18 }}>{saving ? "Uploading…" : "Upload media"}</button>
@@ -753,8 +753,8 @@ function AdminPortfolioManager() {
         <a href={item.preview_url} target="_blank" rel="noopener noreferrer" style={{ overflowWrap: "anywhere" }}>{item.preview_url}</a>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
           <input aria-label="Replacement HTTPS media URL" type="url" placeholder="Replacement HTTPS URL" value={replacementUrls[item.id] || ""} onChange={e => setReplacementUrls(current => ({ ...current, [item.id]: e.target.value }))} style={{ flex: "1 1 280px", padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
-          <button className="button button-outline" type="button" disabled={saving || !replacementUrls[item.id]} onClick={() => void replaceMedia(item)}>Replace URL</button>
-          {item.is_public === 1 && <button className="button button-outline" type="button" disabled={saving} onClick={() => void hideMedia(item)}>Hide</button>}
+          <button className="button button-outline" type="button" disabled={saving || !replacementUrls[item.id] || (!canPublish && item.is_public === 1)} onClick={() => void replaceMedia(item)}>Replace URL</button>
+          {item.is_public === 1 && canPublish && <button className="button button-outline" type="button" disabled={saving} onClick={() => void hideMedia(item)}>Hide</button>}
         </div>
       </article>)}
     </div>
@@ -805,6 +805,7 @@ type AdminSystemStatusData = {
   adminSetupSecretConfigured: boolean;
   adminSetupComplete: boolean;
   adminCount: number;
+  adminRoleSchemaReady: boolean;
   enquirySchemaReady: boolean;
   portfolioSchemaReady: boolean;
   contentTablesReady: boolean;
@@ -831,6 +832,7 @@ function AdminSystemStatus() {
   const checks = data ? [
     ["Database binding", data.databaseConfigured],
     ["Initial admin setup", data.adminSetupComplete],
+    ["Owner/editor role schema", data.adminRoleSchemaReady],
     ["Enquiry schema + consent", data.enquirySchemaReady],
     ["Portfolio schema", data.portfolioSchemaReady],
     ["CMS tables", data.contentTablesReady],
@@ -856,9 +858,98 @@ function AdminSystemStatus() {
   </section>;
 }
 
+type AdminUserRecord = { id: string; email: string; role: string; is_active: number; created_at: string; last_login_at: string | null };
+
+function AdminUserManager() {
+  const [users, setUsers] = useState<AdminUserRecord[]>([]);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/users", { credentials: "same-origin", cache: "no-store" });
+      if (response.status === 401) { window.location.replace("/login"); return; }
+      if (!response.ok) throw new Error("users_unavailable");
+      const data = await response.json() as { users?: AdminUserRecord[] };
+      setUsers(data.users ?? []);
+      setMessage("");
+    } catch { setMessage("User management requires the owner/editor role migration and backend deployment."); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const createEditor = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/users/create", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      if (!response.ok) throw new Error("create_failed");
+      setEmail("");
+      setPassword("");
+      setMessage("Editor account created.");
+      await load();
+    } catch { setMessage("Could not create editor. Use a valid email and a password of at least 14 characters."); }
+    finally { setSaving(false); }
+  };
+
+  const disableEditor = async (user: AdminUserRecord) => {
+    if (saving || user.role !== "editor" || !window.confirm("Disable this editor and revoke their active sessions?")) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/users/disable", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: user.id })
+      });
+      if (!response.ok) throw new Error("disable_failed");
+      setMessage("Editor disabled; active sessions revoked.");
+      await load();
+    } catch { setMessage("Could not disable this editor."); }
+    finally { setSaving(false); }
+  };
+
+  return <section className="service-card" style={{ marginTop: 30 }}>
+    <p className="eyebrow"><span/> ACCESS CONTROL</p><h2>Admin users</h2>
+    <p className="section-subtitle">The owner can create and disable editor accounts. Editors can save drafts but cannot publish, expose media publicly, or manage users.</p>
+    <form onSubmit={createEditor} style={{ marginTop: 18 }}>
+      <div className="services-grid">
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Editor email
+          <input type="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+        <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Temporary password (14+ characters)
+          <input type="password" required minLength={14} maxLength={128} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} style={{ padding: 10, background: "#111416", color: "#eee", border: "1px solid #45413a" }} />
+        </label>
+      </div>
+      <button className="button button-gold" type="submit" disabled={saving} style={{ marginTop: 16 }}>{saving ? "Working…" : "Create editor"}</button>
+    </form>
+    <div style={{ marginTop: 24 }}>
+      <h3>Accounts</h3>
+      {loading && <p className="section-subtitle">Loading admin users…</p>}
+      {!loading && users.map(user => <div key={user.id} style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 12, padding: "12px 0", borderTop: "1px solid #333" }}>
+        <div><strong>{user.email}</strong><p className="section-subtitle">{user.role} · {user.is_active ? "active" : "disabled"} · last login: {user.last_login_at || "never"}</p></div>
+        {user.role === "editor" && user.is_active === 1 && <button className="button button-outline" type="button" disabled={saving} onClick={() => void disableEditor(user)}>Disable editor</button>}
+      </div>)}
+    </div>
+    {message && <p role="status" className="form-notice" style={{ marginTop: 16 }}>{message}</p>}
+    <button type="button" className="button button-outline" onClick={() => void load()} disabled={loading || saving} style={{ marginTop: 16 }}>Refresh users</button>
+  </section>;
+}
+
 function AdminDashboardPage() {
   const [state, setState] = useState<"loading" | "authenticated" | "unauthenticated" | "error">("loading");
   const [email, setEmail] = useState("");
+  const [adminRole, setAdminRole] = useState<"owner" | "editor">("editor");
   const [enquiries, setEnquiries] = useState<AdminEnquiry[]>([]);
   const [counts, setCounts] = useState<Array<{ status: string; count: number }>>([]);
   const [allowedStatuses, setAllowedStatuses] = useState<string[]>([]);
@@ -900,7 +991,7 @@ function AdminDashboardPage() {
       .then(async response => {
         if (response.status === 401) return null;
         if (!response.ok) throw new Error("session_unavailable");
-        return response.json() as Promise<{ authenticated: boolean; admin?: { email: string } }>;
+        return response.json() as Promise<{ authenticated: boolean; admin?: { email: string; role: "owner" | "editor" } }>;
       })
       .then(data => {
         if (!active) return;
@@ -910,6 +1001,7 @@ function AdminDashboardPage() {
           return;
         }
         setEmail(data.admin.email);
+        setAdminRole(data.admin.role);
         setState("authenticated");
       })
       .catch(() => { if (active) setState("error"); });
@@ -953,7 +1045,7 @@ function AdminDashboardPage() {
       <div className="service-card" style={{ maxWidth: 900 }}>
         <LayoutDashboard size={28}/><h2>Welcome to your private workspace</h2>
         <p>Signed in as <strong>{email}</strong></p>
-        <p className="section-subtitle">Enquiry inbox is connected. Portfolio media uploads and page publishing are still under development.</p>
+        <p className="section-subtitle">Role: {adminRole}. Editors can save drafts; only the owner can publish or manage admin accounts.</p>
         <button type="button" className="button button-outline" onClick={logout}><LogOut size={15}/> Sign out</button>
       </div>
       <section style={{ marginTop: 32 }}>
@@ -994,10 +1086,11 @@ function AdminDashboardPage() {
         </article>)}
       </section>
       <AdminSystemStatus />
-      <AdminHomeContentEditor />
-      <AdminSecondaryContentEditor />
-      <AdminPortfolioManager />
-      <AdminAuditLog />
+      <AdminHomeContentEditor canPublish={adminRole === "owner"} />
+      <AdminSecondaryContentEditor canPublish={adminRole === "owner"} />
+      <AdminPortfolioManager canPublish={adminRole === "owner"} />
+      {adminRole === "owner" && <AdminUserManager />}
+      {adminRole === "owner" && <AdminAuditLog />}
       <div className="services-grid" style={{ marginTop: 30 }}>
         <article className="service-card"><h2>Page Content</h2><p>Homepage and other page draft/publish editors are available above.</p></article>
       </div>
