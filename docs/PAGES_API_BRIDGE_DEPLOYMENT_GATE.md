@@ -39,8 +39,9 @@ After the database gate and bindings are approved:
 3. Verify GET /api/health returns 200 and GET /api/ready returns the legacy-compatible ready response.
 4. Verify GET /api/content?page=home returns published content only.
 5. Create the first owner once, through POST /api/admin/setup with the x-admin-setup-secret header and a JSON body containing a valid email and a 14–128 character password. Do this from a trusted HTTPS client; never expose the secret in a public form or URL.
-6. Sign in at /login, verify /api/admin/session, and test the enquiry inbox, draft/publish flow, revision restore, project manager, audit log and status panel.
-7. Submit a test enquiry and verify the consent field, rate limit, status, and audit data. Do not use a real visitor's data for the smoke test.
+6. Sign in at /login, verify /api/admin/session includes the role, and test the enquiry inbox, draft/publish flow, revision restore, project manager, audit log and status panel.
+7. As owner, create an editor account; verify editor access can save drafts but receives 403 for publishing, public-media controls, audit logs and admin-user management.
+8. Submit a test enquiry and verify the consent field, rate limit, status, and audit data. Do not use a real visitor's data for the smoke test.
 
 ## Current state
 
