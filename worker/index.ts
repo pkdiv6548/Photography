@@ -353,6 +353,21 @@ async function supportedEnquiryStatuses(db: D1Binding): Promise<string[]> {
 }
 
 
+function isSafeExternalMediaUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return false;
+    const host = url.hostname.toLowerCase();
+    if (!host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return false;
+    if (/^(127\.|10\.|192\.168\.|169\.254\.)/.test(host)) return false;
+    const match = host.match(/^172\.(\d+)\./);
+    if (match && Number(match[1]) >= 16 && Number(match[1]) <= 31) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const CONTENT_FIELDS: Record<string, Record<string, number>> = {
   home: {
     heroTitleEn: 120, heroTitleHi: 120, heroTextEn: 500, heroTextHi: 500,
@@ -762,6 +777,150 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       return json({ ok: true, id, status });
     } catch {
       return json({ error: "enquiry_update_unavailable" }, 503);
+    }
+  }
+
+  if (url.pathname === "/api/admin/projects" && request.method === "GET") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);
+    try {
+      const result = await env.DB.prepare(
+        "SELECT p.id, p.slug, p.category_slug, p.cover_image_url, p.status, p.is_featured, p.location, p.project_date, p.demo_label, p.created_at, p.updated_at, " +
+        "en.title AS title_en, en.description AS description_en, hi.title AS title_hi, hi.description AS description_hi " +
+        "FROM projects p LEFT JOIN project_translations en ON en.project_id = p.id AND en.locale = 'en' " +
+        "LEFT JOIN project_translations hi ON hi.project_id = p.id AND hi.locale = 'hi' " +
+        "ORDER BY p.updated_at DESC LIMIT 100"
+      ).all();
+      const categories = await env.DB.prepare("SELECT slug, title_en, title_hi FROM categories ORDER BY sort_order, title_en").all();
+      return json({ projects: result.results ?? [], categories: categories.results ?? [] });
+    } catch {
+      return json({ error: "projects_unavailable" }, 503);
+    }
+  }
+
+  if (url.pathname === "/api/admin/projects/save" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    const body = await readAdminJson(request, 8192);
+    const slug = cleanText(body?.slug, 80).toLowerCase();
+    const categorySlug = cleanText(body?.categorySlug, 80);
+    const titleEn = cleanText(body?.titleEn, 120);
+    const titleHi = cleanText(body?.titleHi, 120);
+    const descriptionEn = cleanText(body?.descriptionEn, 2000);
+    const descriptionHi = cleanText(body?.descriptionHi, 2000);
+    const coverImageUrl = cleanText(body?.coverImageUrl, 1000);
+    const status = cleanText(body?.status, 20);
+    const location = cleanText(body?.location, 120);
+    const projectDate = cleanText(body?.projectDate, 10);
+    const demoLabel = cleanText(body?.demoLabel, 80) || "Portfolio";
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || !categorySlug || !titleEn || !titleHi ||
+        !isSafeExternalMediaUrl(coverImageUrl) || !["draft", "published"].includes(status) ||
+        (projectDate && !isValidDate(projectDate))) {
+      return json({ error: "validation_failed" }, 400);
+    }
+    try {
+      const category = await env.DB.prepare("SELECT slug FROM categories WHERE slug = ?").bind(categorySlug).first<{ slug: string }>();
+      if (!category) return json({ error: "invalid_category" }, 400);
+      const projectId = crypto.randomUUID();
+      const project = await env.DB.prepare(
+        "INSERT INTO projects (id, slug, category_slug, cover_image_url, status, is_featured, location, project_date, demo_label, updated_at) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')) " +
+        "ON CONFLICT(slug) DO UPDATE SET category_slug = excluded.category_slug, cover_image_url = excluded.cover_image_url, " +
+        "status = excluded.status, is_featured = excluded.is_featured, location = excluded.location, project_date = excluded.project_date, " +
+        "demo_label = excluded.demo_label, updated_at = datetime('now') RETURNING id"
+      ).bind(projectId, slug, categorySlug, coverImageUrl, status, body?.isFeatured === true ? 1 : 0, location || null, projectDate || null, demoLabel)
+        .first<{ id: string }>();
+      if (!project?.id) return json({ error: "project_save_unavailable" }, 503);
+      await env.DB.prepare(
+        "INSERT INTO project_translations (project_id, locale, title, description) VALUES (?, 'en', ?, ?) " +
+        "ON CONFLICT(project_id, locale) DO UPDATE SET title = excluded.title, description = excluded.description"
+      ).bind(project.id, titleEn, descriptionEn).run();
+      await env.DB.prepare(
+        "INSERT INTO project_translations (project_id, locale, title, description) VALUES (?, 'hi', ?, ?) " +
+        "ON CONFLICT(project_id, locale) DO UPDATE SET title = excluded.title, description = excluded.description"
+      ).bind(project.id, titleHi, descriptionHi).run();
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, ?, 'project', ?)"
+      ).bind(crypto.randomUUID(), admin.id, status === "published" ? "project_published" : "project_saved_draft", project.id).run();
+      return json({ ok: true, id: project.id, slug, status });
+    } catch {
+      return json({ error: "project_save_unavailable" }, 503);
+    }
+  }
+
+  if (url.pathname === "/api/admin/projects/media" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    const body = await readAdminJson(request, 4096);
+    const projectId = cleanText(body?.projectId, 80);
+    const mediaType = cleanText(body?.mediaType, 10);
+    const previewUrl = cleanText(body?.previewUrl, 1000);
+    const altEn = cleanText(body?.altEn, 250);
+    const altHi = cleanText(body?.altHi, 250);
+    const sortOrder = Number(body?.sortOrder ?? 0);
+    if (!projectId || !["image", "video"].includes(mediaType) || !isSafeExternalMediaUrl(previewUrl) ||
+        !Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) {
+      return json({ error: "validation_failed" }, 400);
+    }
+    try {
+      const project = await env.DB.prepare("SELECT id FROM projects WHERE id = ?").bind(projectId).first<{ id: string }>();
+      if (!project) return json({ error: "project_not_found" }, 404);
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        "INSERT INTO project_media (id, project_id, media_type, preview_url, original_key, alt_en, alt_hi, sort_order, is_public) " +
+        "VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)"
+      ).bind(id, projectId, mediaType, previewUrl, altEn, altHi, sortOrder, body?.isPublic === true ? 1 : 0).run();
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, ?, 'media', ?)"
+      ).bind(crypto.randomUUID(), admin.id, body?.isPublic === true ? "media_added_public" : "media_added_draft", id).run();
+      return json({ ok: true, id, isPublic: body?.isPublic === true }, 201);
+    } catch {
+      return json({ error: "media_save_unavailable" }, 503);
+    }
+  }
+
+  if (url.pathname === "/api/admin/projects/media/replace" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    const body = await readAdminJson(request, 4096);
+    const id = cleanText(body?.id, 80);
+    const previewUrl = cleanText(body?.previewUrl, 1000);
+    const altEn = cleanText(body?.altEn, 250);
+    const altHi = cleanText(body?.altHi, 250);
+    if (!id || !isSafeExternalMediaUrl(previewUrl)) return json({ error: "validation_failed" }, 400);
+    try {
+      const result = await env.DB.prepare(
+        "UPDATE project_media SET preview_url = ?, alt_en = ?, alt_hi = ? WHERE id = ?"
+      ).bind(previewUrl, altEn, altHi, id).run();
+      if ((result.meta?.changes ?? 0) !== 1) return json({ error: "media_not_found" }, 404);
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'media_replaced', 'media', ?)"
+      ).bind(crypto.randomUUID(), admin.id, id).run();
+      return json({ ok: true, id });
+    } catch {
+      return json({ error: "media_replace_unavailable" }, 503);
+    }
+  }
+
+  if (url.pathname === "/api/admin/projects/media/hide" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    const body = await readAdminJson(request);
+    const id = cleanText(body?.id, 80);
+    if (!id) return json({ error: "validation_failed" }, 400);
+    try {
+      const result = await env.DB.prepare("UPDATE project_media SET is_public = 0 WHERE id = ?").bind(id).run();
+      if ((result.meta?.changes ?? 0) !== 1) return json({ error: "media_not_found" }, 404);
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'media_hidden', 'media', ?)"
+      ).bind(crypto.randomUUID(), admin.id, id).run();
+      return json({ ok: true, id, isPublic: false });
+    } catch {
+      return json({ error: "media_hide_unavailable" }, 503);
     }
   }
 
