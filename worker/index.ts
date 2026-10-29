@@ -1141,6 +1141,71 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  if (url.pathname === "/api/admin/users" && request.method === "GET") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
+    try {
+      const result = await env.DB.prepare(
+        "SELECT id, email, role, is_active, created_at, last_login_at FROM admin_users ORDER BY created_at DESC LIMIT 100"
+      ).all();
+      return json({ users: result.results ?? [] });
+    } catch {
+      return json({ error: "admin_users_unavailable" }, 503);
+    }
+  }
+
+  if (url.pathname === "/api/admin/users/create" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
+    if (await authRateLimited(request, env, "create-admin")) return json({ error: "temporarily_unavailable" }, 429);
+    const body = await readAdminJson(request);
+    const email = cleanText(body?.email, 254).toLowerCase();
+    const password = typeof body?.password === "string" ? body.password : "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 14 || password.length > 128) {
+      return json({ error: "validation_failed", requirements: "Use a valid email and a 14–128 character password." }, 400);
+    }
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    try {
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        "INSERT INTO admin_users (id, email, password_hash, password_salt, role, is_active) VALUES (?, ?, ?, ?, 'editor', 1)"
+      ).bind(id, email, await deriveAdminPassword(password, salt), toBase64Url(salt)).run();
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'admin_editor_created', 'admin', ?)"
+      ).bind(crypto.randomUUID(), admin.id, id).run();
+      return json({ ok: true, user: { id, email, role: "editor" } }, 201);
+    } catch {
+      return json({ error: "admin_user_create_unavailable" }, 503);
+    }
+  }
+
+  if (url.pathname === "/api/admin/users/disable" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    if (admin.role !== "owner") return json({ error: "forbidden" }, 403);
+    const body = await readAdminJson(request);
+    const id = cleanText(body?.id, 80);
+    if (!id || id === admin.id) return json({ error: "invalid_target" }, 400);
+    try {
+      const target = await env.DB.prepare("SELECT id, role FROM admin_users WHERE id = ?").bind(id).first<{ id: string; role: string }>();
+      if (!target) return json({ error: "admin_user_not_found" }, 404);
+      if (target.role !== "editor") return json({ error: "owner_cannot_be_disabled" }, 403);
+      await env.DB.prepare("UPDATE admin_users SET is_active = 0 WHERE id = ?").bind(id).run();
+      await env.DB.prepare("DELETE FROM admin_sessions WHERE admin_user_id = ?").bind(id).run();
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'admin_editor_disabled', 'admin', ?)"
+      ).bind(crypto.randomUUID(), admin.id, id).run();
+      return json({ ok: true, id, is_active: false });
+    } catch {
+      return json({ error: "admin_user_disable_unavailable" }, 503);
+    }
+  }
+
   if (url.pathname === "/api/admin/system-status" && request.method === "GET") {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);
