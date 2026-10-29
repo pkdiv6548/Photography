@@ -43,6 +43,6 @@ All placeholder/demo media must be clearly labeled as sample content and must no
 ## Current limitations
 
 - Real phone, WhatsApp, email and Instagram details have not been provided.
-- The Worker is not deployed. The D1 binding is configured. The existing D1 database has a legacy schema mismatch; current migrations must not be applied to it until a safe forward-migration plan is reviewed and the export has been restored successfully in a disposable environment.
-- Email notifications, Admin authentication, password recovery, email verification, R2 uploads and the production admin UI are not implemented.
-- No paid Cloudflare resource or production deployment is enabled.
+- The static Cloudflare Pages portfolio is deployed, but the Worker API is not deployed/connected to the production Pages routes. The Wrangler configuration references the D1 database, but Pages runtime D1 binding and `ADMIN_SETUP_SECRET` are not configured. The live D1 database has a legacy schema mismatch; do not apply migrations until a verified export has been restored and the exact forward migration passes against a disposable copy.
+- Admin authentication, owner/editor authorization, the CMS, revision history, admin audit view and optional R2 upload code exist in the repository, but they are not confirmed working in production because the API bridge and runtime bindings are not active. Password recovery, email verification and email notifications remain unimplemented.
+- No paid Cloudflare resource is enabled. The static site deployment does not establish API or database readiness.
