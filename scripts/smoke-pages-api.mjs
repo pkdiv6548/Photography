@@ -62,6 +62,12 @@ const checks = [
       if (!body || typeof body !== "object" || Array.isArray(body)) {
         throw new Error("expected a JSON object");
       }
+      if (body.page !== "home") {
+        throw new Error(`expected page="home", got ${JSON.stringify(body.page)}`);
+      }
+      if (!body.content || typeof body.content !== "object" || Array.isArray(body.content)) {
+        throw new Error("expected content to be a JSON object");
+      }
     },
   },
 ];
