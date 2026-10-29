@@ -232,6 +232,7 @@ export default function App() {
             <span aria-hidden="true">/</span>
             <button type="button" className={language === "hi" ? "active" : ""} onClick={() => setLanguage("hi")} aria-pressed={language === "hi"}>हिंदी</button>
           </div>
+          <a className="text-link" href="/login" style={{ marginRight: 12 }}>Admin Login</a>
           <a className="button button-gold header-cta" href="#contact">{t.contactSunil}<ArrowRight size={15} /></a>
         </div>
       </header>
@@ -390,7 +391,7 @@ export default function App() {
         <div className="footer-column"><h3>{t.quickLinks}</h3><a href="#home">{t.nav[0]}</a><a href="#categories">{t.nav[1]}</a><a href="#featured">{t.featuredTitle}</a><a href="#about">{t.nav[3]}</a></div>
         <div className="footer-column"><h3>{t.services}</h3>{services.map((item) => <button type="button" key={item.id} onClick={() => jumpToCategories(item.id.includes("editing") ? "editing" : item.id as PortfolioGroup)}>{item.title[language]}</button>)}</div>
         <div className="footer-column"><h3>{t.contact}</h3><a href="#contact">{t.contactSunil}</a><a href="#contact">WhatsApp · Phone</a><a href="#contact">Email · Instagram</a><span className="footer-muted">{language === "en" ? "Official details will be added before launch." : "लाइव करने से पहले असली विवरण जोड़े जाएँगे।"}</span></div>
-        <div className="footer-bottom"><span>© {new Date().getFullYear()} Golden Films</span><span>{t.allRights}</span><a href="#home">Back to top ↑</a></div>
+        <div className="footer-bottom"><span>© {new Date().getFullYear()} Golden Films</span><span>{t.allRights}</span><a href="/login">Admin Login</a><a href="/register">Initial Setup</a><a href="#home">Back to top ↑</a></div>
       </footer>
     </div>
   );
