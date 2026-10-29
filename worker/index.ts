@@ -19,9 +19,25 @@ interface StaticAssetsBinding {
   fetch(request: Request): Promise<Response>;
 }
 
+interface R2ObjectBody {
+  body: ReadableStream<Uint8Array>;
+  httpMetadata?: { contentType?: string };
+  httpEtag?: string;
+}
+
+interface R2BucketBinding {
+  put(key: string, value: ReadableStream<Uint8Array> | ArrayBuffer, options?: {
+    httpMetadata?: { contentType?: string };
+    customMetadata?: Record<string, string>;
+  }): Promise<unknown>;
+  get(key: string): Promise<R2ObjectBody | null>;
+  delete(key: string): Promise<void>;
+}
+
 interface Env {
   DB?: D1Binding;
   ASSETS?: StaticAssetsBinding;
+  MEDIA_BUCKET?: R2BucketBinding;
   ADMIN_SETUP_SECRET?: string;
 }
 
