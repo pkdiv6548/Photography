@@ -208,7 +208,8 @@ export default function App() {
   };
 
   return (
-    <div className="site-shell">\n      {isDraftPreview && <div className="demo-banner">Draft preview — unpublished homepage content</div>}
+    <div className="site-shell">
+      {isDraftPreview && <div className="demo-banner">Draft preview — unpublished homepage content</div>}
       <div className="demo-banner"><Sparkles size={14} /> {t.sampleNotice}</div>
       <header className="site-header">
         <a className="brand" href="#home" aria-label="Golden Films home">
