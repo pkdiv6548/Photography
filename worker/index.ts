@@ -278,8 +278,8 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
     const salt = crypto.getRandomValues(new Uint8Array(16));
     try {
       const result = await env.DB.prepare(
-        "INSERT INTO admin_users (id, email, password_hash, password_salt, is_active) " +
-        "SELECT ?, ?, ?, ?, 1 WHERE NOT EXISTS (SELECT 1 FROM admin_users) " +
+        "INSERT INTO admin_users (id, email, password_hash, password_salt, role, is_active) " +
+        "SELECT ?, ?, ?, ?, 'owner', 1 WHERE NOT EXISTS (SELECT 1 FROM admin_users) " +
         "AND EXISTS (SELECT 1 FROM admin_setup WHERE id = 1 AND completed_at IS NULL)"
       ).bind(id, email, await deriveAdminPassword(password, salt), toBase64Url(salt)).run();
       if ((result.meta?.changes ?? 0) !== 1) return json({ error: "initial_setup_already_completed" }, 409);
