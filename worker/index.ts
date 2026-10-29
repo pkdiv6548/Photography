@@ -480,6 +480,62 @@ async function handleContentApi(request: Request, env: Env, url: URL): Promise<R
     }
   }
 
+  if (path === "/api/admin/content/revisions" && request.method === "GET") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);
+    const page = url.searchParams.get("page") ?? "home";
+    const rawLimit = url.searchParams.get("limit") ?? "20";
+    const limit = Number(rawLimit);
+    if (!Object.prototype.hasOwnProperty.call(CONTENT_FIELDS, page)) return json({ error: "invalid_page" }, 400);
+    if (!/^\\d+$/.test(rawLimit) || !Number.isInteger(limit) || limit < 1 || limit > 30) {
+      return json({ error: "invalid_limit", allowed: "1-30" }, 400);
+    }
+    try {
+      const result = await env.DB.prepare(
+        "SELECT id, page_slug, revision_status, changed_by, created_at, content_json " +
+        "FROM site_content_revisions WHERE page_slug = ? ORDER BY created_at DESC LIMIT ?"
+      ).bind(page, limit).all();
+      return json({ page, revisions: result.results ?? [] });
+    } catch {
+      return json({ error: "content_revisions_unavailable" }, 503);
+    }
+  }
+
+  if (path === "/api/admin/content/restore" && request.method === "POST") {
+    if (!env.DB) return json({ error: "database_not_configured" }, 503);
+    const admin = await currentAdmin(request, env);
+    if (!admin) return json({ error: "unauthorized" }, 401);
+    const body = await readAdminJson(request, 8192);
+    const revisionId = cleanText(body?.revisionId, 80);
+    if (!revisionId) return json({ error: "validation_failed" }, 400);
+    try {
+      const revision = await env.DB.prepare(
+        "SELECT id, page_slug, content_json FROM site_content_revisions WHERE id = ?"
+      ).bind(revisionId).first<{ id: string; page_slug: string; content_json: string }>();
+      if (!revision || !Object.prototype.hasOwnProperty.call(CONTENT_FIELDS, revision.page_slug)) {
+        return json({ error: "revision_not_found" }, 404);
+      }
+      let parsed: unknown;
+      try { parsed = JSON.parse(revision.content_json); } catch { return json({ error: "revision_invalid" }, 400); }
+      const safeContent = validatePageContent(revision.page_slug, parsed);
+      if (!safeContent) return json({ error: "revision_invalid" }, 400);
+      const serialized = JSON.stringify(safeContent);
+      await env.DB.prepare(
+        "INSERT INTO site_content (page_slug, draft_json, status, updated_by, updated_at) VALUES (?, ?, 'draft', ?, datetime('now')) " +
+        "ON CONFLICT(page_slug) DO UPDATE SET draft_json = excluded.draft_json, status = 'draft', updated_by = excluded.updated_by, updated_at = datetime('now')"
+      ).bind(revision.page_slug, serialized, admin.id).run();
+      await env.DB.prepare(
+        "INSERT INTO site_content_revisions (id, page_slug, content_json, revision_status, changed_by) VALUES (?, ?, ?, 'draft', ?)"
+      ).bind(crypto.randomUUID(), revision.page_slug, serialized, admin.id).run();
+      await env.DB.prepare(
+        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'content_restored_as_draft', 'page', ?)"
+      ).bind(crypto.randomUUID(), admin.id, revision.page_slug).run();
+      return json({ ok: true, page: revision.page_slug, status: "draft", content: safeContent });
+    } catch {
+      return json({ error: "content_restore_unavailable" }, 503);
+    }
+  }
+
   if (path === "/api/admin/content/preview" && request.method === "GET") {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     if (!await currentAdmin(request, env)) return json({ error: "unauthorized" }, 401);
