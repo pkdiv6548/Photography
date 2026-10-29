@@ -25,5 +25,7 @@ jobs:
         run: npm run typecheck
       - name: Run Worker API regression tests
         run: npm test
+      - name: Run forward-migration SQLite fixture test
+        run: python3 scripts/test-forward-migration.py
       - name: Build frontend
         run: npm run build
