@@ -508,3 +508,41 @@ test("same-origin requests are allowed while cross-origin preflights are rejecte
   assert.deepEqual(await crossOriginPreflight.json(), { error: "origin_not_allowed" });
   assert.equal(crossOriginPreflight.headers.get("X-Frame-Options"), "DENY");
 });
+
+
+test("initial admin setup explicitly assigns the owner role", async () => {
+  const statements: string[] = [];
+  const db = {
+    prepare(query: string) {
+      statements.push(query);
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("INSERT INTO auth_rate_limits")) return { request_count: 1 } as T;
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 1 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/setup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-setup-secret": "test-setup-secret"
+      },
+      body: JSON.stringify({
+        email: "owner@example.test",
+        password: "a-long-test-password-123"
+      })
+    }),
+    { DB: db, ADMIN_SETUP_SECRET: "test-setup-secret" }
+  );
+  assert.equal(response.status, 201);
+  const insert = statements.find(query => query.includes("INSERT INTO admin_users"));
+  assert.ok(insert, "expected initial admin insert query");
+  assert.match(insert, /password_salt, role, is_active/);
+  assert.match(insert, /'owner'/);
+});
