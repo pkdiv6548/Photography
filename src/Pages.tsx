@@ -898,7 +898,7 @@ function AdminSystemStatus() {
     ["Enquiry schema + consent", data.enquirySchemaReady],
     ["Portfolio schema", data.portfolioSchemaReady],
     ["CMS tables", data.contentTablesReady],
-    ["R2 media storage", data.mediaStorageConfigured],
+    ["Supabase Storage", data.mediaStorageConfigured],
     ["Setup secret", data.adminSetupSecretConfigured],
   ] as Array<[string, boolean]> : [];
   return <section className="service-card" style={{ marginTop: 24 }}>
