@@ -1,5 +1,13 @@
 # Admin Release Work Breakdown
 
+## Security review update — 2026-10-30
+
+- [x] Identified and corrected a least-privilege issue in the candidate production-copy migration: legacy `admin_users` now receive `role='editor'` by default instead of being silently elevated to owner.
+- [x] Updated the SQLite forward-migration fixture to assert that existing legacy accounts remain editors and that the new column default is editor.
+- [x] Documented the required deliberate, audited owner promotion path in `docs/PRODUCTION_D1_MIGRATION_GATE.md`.
+- [ ] Await CI for the migration/test change; do not treat the change as verified until the new run passes.
+- [ ] Still requires testing against a verified export restored into a disposable D1 database. No production database was modified.
+
 ## Latest continuation update — 2026-10-30
 
 - [x] Fixed the contact form service values so the frontend submits the exact service slugs accepted by the Worker API; unsupported `Other` was removed from the selectable values.
