@@ -2,16 +2,28 @@
 
 Use this checklist only in the **Preview** environment and a test admin account. Do not run write tests against Production until the Production D1 schema and binding are repaired and a backup is verified.
 
+## Configure Preview secrets in the Cloudflare dashboard
+
+1. Open the official Cloudflare dashboard: https://dash.cloudflare.com/ and choose the account containing the `golden-films` Pages project.
+2. Open **Workers & Pages → golden-films → Settings → Variables and Secrets** (the exact label can vary slightly).
+3. Select the **Preview** environment. Do not accidentally edit Production while testing.
+4. Add `SUPABASE_SERVICE_ROLE_KEY` as a **Secret**, not plain text. Copy the service-role/secret key from the dedicated Supabase **Photography** project only. Never paste it into chat, source files, GitHub, client-side `VITE_*` variables, browser storage, or shared Postman environments.
+5. Add `ADMIN_SETUP_SECRET` as a separate strong, random Preview-only **Secret**. Do not reuse the Supabase key or a production credential. Store it in a password manager.
+6. Confirm the existing non-secret variables remain correct: `SUPABASE_URL=https://lxaqpktmnjzbhtcityyc.supabase.co` and `SUPABASE_STORAGE_BUCKET=golden-films-media`.
+7. Save the changes and trigger/retry a Preview deployment for branch `feat/supabase-storage-free-tier`. Wait until both build and deploy report success. A secret change is not validated until the new deployment is active.
+
+If the dashboard does not offer the Secret type, stop and resolve account permissions. Do not put a sensitive key into a plain-text variable as a workaround.
+
 ## Current prerequisite status
 
-- [ ] Set `SUPABASE_SERVICE_ROLE_KEY` as a Cloudflare Pages **server-side Secret** in Preview. Never put it in Vite/client variables, GitHub, Postman shared environments, or chat.
+- [ ] Set `SUPABASE_SERVICE_ROLE_KEY` as a Cloudflare Pages **server-side Secret** in Preview.
 - [ ] Set a strong Preview-only `ADMIN_SETUP_SECRET` as a server-side Secret.
 - [ ] Confirm Preview has the expected D1 binding and the additive migration `migrations/0099_gf_monthly_media_usage.sql`.
 - [ ] Redeploy Preview after changing runtime settings, then confirm the deployment completed.
 
 ## Smoke checks
 
-1. Open the Preview site and check `GET /api/health`; expected HTTP 200 with `{"status":"ok","service":"golden-films-api"}`.
+1. Open the latest Preview deployment URL and check `GET /api/health`; expected HTTP 200 with `{"status":"ok","service":"golden-films-api"}`.
 2. Check `GET /api/ready`; expected HTTP 200 only when D1 and all required schema columns/tables are present. A 503 means the API is not ready—do not proceed to upload tests.
 3. Use the admin UI to complete first-admin setup with the Preview setup secret. Confirm login works, then sign out and confirm a protected admin route rejects unauthenticated requests.
 4. Upload a small test JPEG (<1 MiB) from the admin UI. Confirm it appears in the private `golden-films-media` bucket and renders through the intended app media route; do not make the bucket public.
