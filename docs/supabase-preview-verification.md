@@ -20,7 +20,7 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 
 **Configuration and read-only D1 schema audit (Cloudflare API, 2026-10-30):**
 
-- [x] Latest successful Preview deployment reported by Cloudflare: `https://cec4776b.golden-films.pages.dev`, commit `3b54390f652125bc683dde9966e8c1f0635d1e5f`. Deployment success confirms build/deploy only, not API readiness.
+- [x] Latest successful Preview deployment reported by Cloudflare on 2026-10-30: `https://7c326f1c.golden-films.pages.dev`, commit `9f4f7333371b11c8d5688afce6c1abbfcb7e6384`. Deployment success confirms build/deploy only, not API readiness.
 - [x] Preview D1 binding `DB` is configured to database `golden-films-preview-test` (`21f470cb-776a-4eb2-816e-16605139299a`).
 - [x] Read-only schema inspection confirms Preview has `gf_monthly_media_usage`, `admin_users.role`, `enquiries.consent`, `site_content`, and `site_content_revisions`.
 - [x] Preview non-secret variables `SUPABASE_URL` and `SUPABASE_STORAGE_BUCKET` are configured.
