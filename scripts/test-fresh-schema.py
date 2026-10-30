@@ -142,6 +142,10 @@ def main():
     assert media["original_key"] == "projects/test/photo.jpg" and media["is_public"] == 1, media
     assert media["alt_en"] == "English alt" and media["alt_hi"] == "हिंदी alt", media
 
+    # Least privilege: omitted role must never promote a new account to owner.
+    admin_role = next(row for row in db.execute("PRAGMA table_info(admin_users)") if row["name"] == "role")
+    assert admin_role["dflt_value"] == "'editor'", admin_role["dflt_value"]
+
     # Exercise representative CHECK, UNIQUE, and FK constraints, without retaining bad rows.
     expect_integrity_error(
         db,
