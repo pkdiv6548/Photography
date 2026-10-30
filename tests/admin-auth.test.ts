@@ -105,6 +105,30 @@ test("admin logout requires an authenticated session", async () => {
   assert.deepEqual(await response.json(), { error: "unauthorized" });
 });
 
+test("authenticated admin logout revokes the session and expires the secure cookie", async () => {
+  const db = mockDbWithAuthenticatedSession();
+  const response = await worker.fetch(new Request("https://example.test/api/admin/logout", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      cookie: "__Host-gf_admin=sample-session-token"
+    },
+    body: "{}"
+  }), { DB: db });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+  const cookie = response.headers.get("set-cookie") ?? "";
+  assert.match(cookie, /__Host-gf_admin=;/);
+  assert.match(cookie, /Max-Age=0/);
+  assert.match(cookie, /Path=\//);
+  assert.match(cookie, /Secure/);
+  assert.match(cookie, /HttpOnly/);
+  assert.match(cookie, /SameSite=Strict/);
+  assert.ok(db.queries.some(query => query.includes("DELETE FROM admin_sessions")));
+  assert.ok(db.queries.some(query => query.includes("'logout'")));
+});
+
 test("admin CMS content is never exposed without an authenticated session", async () => {
   const response = await worker.fetch(new Request("https://example.test/api/admin/content"), { DB: mockDb() });
   assert.equal(response.status, 401);
