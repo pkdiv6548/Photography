@@ -16,13 +16,18 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 
 ## Current prerequisite status
 
-- [x] Cloudflare Pages reported a successful Preview deployment for commit `39d32aa` at `https://feat-supabase-storage-free-t.golden-films.pages.dev` (deployment success only; runtime health/readiness and Supabase operations are not yet verified).
+**Configuration audit (Cloudflare Pages API, 2026-10-30):**
 
+- [x] Latest Preview deployment is successful for commit `08bc9e70d246e04f62b134abe41231e78a5b6a55`; deployment URL: `https://394767ee.golden-films.pages.dev` (branch alias: `https://feat-supabase-storage-free-t.golden-films.pages.dev`). This confirms build/deploy only, not API readiness.
+- [x] Preview D1 binding `DB` is configured (database ID `21f470cb-776a-4eb2-816e-16605139299a`).
+- [x] Preview non-secret variables are configured: `SUPABASE_URL` and `SUPABASE_STORAGE_BUCKET`.
+- [ ] **BLOCKED:** Preview `ADMIN_SETUP_SECRET` exists as a secret entry but its configured value is empty.
+- [ ] **BLOCKED:** Preview `SUPABASE_SERVICE_ROLE_KEY` is absent from the Pages environment configuration.
+- [ ] **BLOCKED:** Production has no `DB` D1 binding and no `SUPABASE_SERVICE_ROLE_KEY` configured.
 - [ ] Set `SUPABASE_SERVICE_ROLE_KEY` as a Cloudflare Pages **server-side Secret** in Preview.
 - [ ] Set a strong Preview-only `ADMIN_SETUP_SECRET` as a server-side Secret.
 - [ ] Confirm Preview has the expected D1 binding and the additive migration `migrations/0099_gf_monthly_media_usage.sql`.
 - [ ] Redeploy Preview after changing runtime settings, then confirm the deployment completed.
-
 ## Smoke checks
 
 1. Open the latest Preview deployment URL and check `GET /api/health`; expected HTTP 200 with `{"status":"ok","service":"golden-films-api"}`.
