@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { Aperture, ArrowRight, ArrowUpRight, Camera, Check, ChevronDown, Clapperboard, Heart, LockKeyhole, Menu, Play, Search, ShieldCheck, Sparkles, Star, UserRound, X } from "lucide-react";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { Aperture, ArrowRight, ArrowUpRight, Camera, Check, ChevronDown, LockKeyhole, Menu, Play, ShieldCheck, Sparkles, UserRound, X } from "lucide-react";
 
 type Lang = "en" | "hi";
 const photos = {
@@ -50,7 +50,7 @@ function go(path:string){ window.location.href=path; }
 function Brand(){return <a className="gf-brand" href="/" aria-label="Golden Films home"><span className="gf-brand-icon"><Aperture size={26}/></span><span><b>GOLDEN <i>FILMS</i></b><small>PHOTOGRAPHY · CINEMATOGRAPHY</small></span></a>}
 function Header(){const [open,setOpen]=useState(false);return <header className="gf-header"><Brand/><button className="gf-menu-toggle" aria-label="Toggle menu" onClick={()=>setOpen(!open)}>{open?<X/>:<Menu/>}</button><nav className={open?"gf-nav open":"gf-nav"}>{navItems.map(([label,path])=><a key={path} href={path} onClick={()=>setOpen(false)}>{label}</a>)}<a className="gf-login-link" href="/account-login"><UserRound size={15}/> Login</a></nav><a className="gf-book-btn" href="/booking">Book a Shoot <ArrowRight size={15}/></a></header>}
 function Footer(){return <footer className="gf-footer"><div><Brand/><p>Capturing moments. Crafting memories. Creating films that feel like you.</p></div><div><h4>Explore</h4><a href="/photography">Photography</a><a href="/videography">Videography</a><a href="/portfolio">Portfolio</a><a href="/packages">Packages</a></div><div><h4>Your Account</h4><a href="/account-login">Login</a><a href="/signup">Create account</a><a href="/account">Account dashboard</a><a href="/contact">Contact us</a></div><div><h4>Let's talk</h4><p>Tell us about your celebration, creative brief or next big idea.</p><a className="gf-text-link" href="/booking">Start an enquiry <ArrowRight size={15}/></a></div><div className="gf-footer-bottom">© {new Date().getFullYear()} Golden Films <span>Photography · Videography · Films</span><a href="#top">Back to top ↑</a></div></footer>}
-function Layout({children}:{children:React.ReactNode}){return <div className="gf-site" id="top"><Header/>{children}<Footer/></div>}
+function Layout({children}:{children:ReactNode}){return <div className="gf-site" id="top"><Header/>{children}<Footer/></div>}
 function Eyebrow({children}:{children:React.ReactNode}){return <p className="gf-eyebrow"><span/>{children}</p>}
 function SectionHeading({eyebrow,title,text}:{eyebrow:string;title:string;text?:string}){return <div className="gf-section-heading"><Eyebrow>{eyebrow}</Eyebrow><h2>{title}</h2>{text&&<p>{text}</p>}</div>}
 function CategoryCards({items}:{items:string[][]}){return <div className="gf-category-grid">{items.map(([id,title,desc,image],i)=><a className="gf-category-card" href={"/category/"+id} key={id}><div className="gf-card-image"><img src={image} alt={title} loading="lazy"/><span className="gf-card-number">{String(i+1).padStart(2,"0")}</span><span className="gf-card-arrow"><ArrowUpRight size={19}/></span></div><div className="gf-card-copy"><h3>{title}</h3><p>{desc}</p></div></a>)}</div>}
