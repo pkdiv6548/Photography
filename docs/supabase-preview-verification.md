@@ -16,7 +16,7 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 
 ## Current prerequisite status
 
-**Latest confirmed automated verification:** GitHub Actions run `41083836266` (run #338, `Golden Films checks`) completed with conclusion `success` for commit `1f0ac24fa891c85afd6888493058136a0b7e95bf`. Later documentation/migration-test commits have been pushed, but the available workflow/status lookup returned no run for their latest commit at the last check. Do not assume those commits passed CI until a new run is visible. Even a passing CI run does not confirm live Supabase Storage behavior.
+**Latest confirmed automated verification:** GitHub Actions run `41091916120` (run #344, `Golden Films checks`) completed with conclusion `success` for head commit `b77635991d9735bb8435811c8ed10a7843e63914`. Typecheck, Worker API regression tests, forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend build all passed. This is CI evidence only; it does not confirm live Supabase Storage behavior or Production schema compatibility.
 
 **Configuration and read-only D1 schema audit (Cloudflare API, 2026-10-30):**
 
