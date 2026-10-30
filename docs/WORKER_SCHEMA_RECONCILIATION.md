@@ -31,7 +31,7 @@ This is an implementation gate, not a claim that the schema is compatible.
 
 ## Merge gate
 
-Keep PR #81 draft until fresh-schema and restored-legacy-schema integration tests pass. Passing TypeScript/unit CI alone does not prove D1 SQL compatibility. Production migration or deployment requires explicit approval after disposable-restore results are reviewed.
+PR #81 is merged; its merge does not close this schema gate. Fresh-schema and restored-legacy-schema integration tests are still required. Passing TypeScript/unit CI alone does not prove D1 SQL compatibility. Production migration or deployment requires explicit approval after disposable-restore results are reviewed.
 
 
 ## Canonical-to-Worker field mapping (review before implementation)
@@ -67,7 +67,7 @@ This mapping is a target for a coordinated adapter/migration change. It is **not
 - Endpoint coverage for every row above, including admin login/session/logout, owner setup (including concurrent attempts), CMS revision/publish, and media authorization.
 - A preview environment with actual Pages/Worker routes and bindings verified before production rollout.
 
-Until that evidence exists, keep readiness fail-closed and keep both schema and admin-auth PRs unmerged.
+Until that evidence exists, keep readiness fail-closed. PR #81 and PR #83 are merged, but the schema/admin release gates remain open; merge status is not proof of runtime compatibility.
 
 
 ## Verified repository migration chain
@@ -79,6 +79,7 @@ The repository's current migration directory contains these ordered files on the
 3. `migrations/0003_admin_auth_foundation.sql` — admin authentication foundation, sessions, setup state, audit log, and auth rate limits.
 4. `migrations/0004_site_content_cms.sql` — CMS content and revision tables.
 5. `migrations/0005_admin_roles.sql` — admin role column for a fresh migration chain.
+6. `migrations/0006_worker_schema_compat.sql` — Worker-facing compatibility columns/table for the fresh migration chain.
 
 This list confirms the repository files only. It does **not** prove that production applied any of them; the production database was previously reported without a `d1_migrations` history. Treat the deployed schema as unknown until a verified, read-only schema export and table/column audit are available.
 
@@ -101,7 +102,7 @@ This list confirms the repository files only. It does **not** prove that product
 
 ## Follow-up review of PR #81 candidate migration (2026-10-30)
 
-The separate draft PR #81 now contains a candidate `migrations/0006_worker_schema_compat.sql` on branch `feat/admin-auth-pages`. It adds Worker-facing columns and a `project_media` table after the canonical fresh-install migrations. This is progress toward fresh-schema compatibility, but it is not merged into `main` and is not a production forward migration.
+PR #81 merged `migrations/0006_worker_schema_compat.sql` into `main`. It adds Worker-facing compatibility columns and a `project_media` table after the canonical fresh-install migrations. This improves the fresh-schema contract but does not prove all Worker SQL executes correctly, and it is not a reviewed legacy-production forward migration.
 
 Review notes that must be validated by executable tests before this gate can close:
 
@@ -111,5 +112,5 @@ Review notes that must be validated by executable tests before this gate can clo
 4. The migration is a compatibility adapter for a fresh schema, not the legacy production forward migration. Production's non-null `enquiries.email`, missing consent/role/CMS columns, and unknown migration history still require a separate restored-export rehearsal.
 5. Run the entire Worker query contract—not just PRAGMA column checks—against the migrated fresh schema. Include category/project/media reads and writes, enquiry creation/status changes, owner setup/login/session/logout, CMS draft/revision/publish, audit logging, and rate-limit upserts.
 
-Until these checks pass on CI and a verified disposable legacy restore, PRs #81 and #63 should remain unmerged and production D1 untouched.
+PR #81 and PR #83 are merged; PR #63 remains the separate Pages `/api` bridge/release-gate workstream. Keep production D1 untouched until executable SQL checks and a verified disposable legacy restore pass, the preview route/bindings are verified, and explicit production approval is recorded.
 
