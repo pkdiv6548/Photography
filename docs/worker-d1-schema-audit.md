@@ -79,3 +79,11 @@ These are static contract findings, not evidence that Production currently lacks
 - The above is a source-level coverage check only. It does not execute the audit SQL against the real D1 schema and does not establish that the expected unique indexes exist in Production.
 - Pull request #87 remains open and Draft; no submitted reviews or inline review threads were returned in this check.
 - No Production database, secret, or deployment setting was changed. Live Preview/Production API behavior and Supabase Storage upload/read/delete remain unverified.
+
+
+## CI follow-up (2026-10-31, run #356)
+
+- GitHub Actions run [#356](https://github.com/pkdiv6548/Photography/actions/runs/41141669239) completed successfully for commit `45d05e8f9e6ccf5b5ba9d24d9f5a1e89c7d188bf`.
+- Confirmed successful steps: dependency installation, frontend/Worker TypeScript checks, Worker API regression tests, candidate forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend production build.
+- This is another CI/build confirmation, not a Production D1 export/restore test and not a live Preview API or Supabase Storage test. No Production database, secret, or deployment setting was changed.
+- PR #87 remains open and Draft. Keep it unmerged until the real schema baseline is reconciled, Preview secrets are configured through the dashboard, and the end-to-end acceptance checks pass.
