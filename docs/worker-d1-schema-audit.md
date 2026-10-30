@@ -29,3 +29,24 @@ The Worker's `/api/ready` endpoint checks presence of columns in categories, pro
 ## Verification limits
 
 Automated CI success proves only that the configured fixtures and build pass. Live Supabase Storage, admin login, Production schema compatibility, and live endpoint checks remain unverified. Preview secrets setup remains on hold. No database was changed by this audit.
+
+## Additional SQL-contract checks from a second pass
+
+- **Admin login writes admin_users.last_login_at** after a successful login. The readiness audit's expected-column list does not include this column, and the candidate forward migration only adds role. If the intended D1 schema lacks last_login_at, login can fail after password verification when it tries to persist the timestamp.
+- **Failed-login audit rows omit admin_user_id** (NULL is intentionally used) while successful-login/setup/content/admin actions populate it. The actual audit_logs.admin_user_id column must therefore allow NULL or the failed-login audit insert will fail; that insert is best-effort today, so the login response may still be 401 while the audit event silently disappears.
+- **Project translation writes rely on a unique conflict target (project_id, locale)**, while the initial migration's primary key is (project_id, language). Adding a locale column alone is insufficient: the unique index/constraint must match the conflict target, and existing translations need a verified mapping before any migration.
+- **Media writes and deletes depend on project_media.original_key** and the public media proxy checks original_key, is_public, and project publication status. A migration that merely renames the old media table without a verified key mapping could break private-object retrieval or publication checks.
+- **The readiness endpoint is a shallow gate.** It checks selected tables/columns, but does not validate unique conflict targets, NOT NULL/CHECK constraints, required indexes, or the full query contract. A ready response cannot substitute for exercising login, project save, media upload/read/hide, and enquiry create/status-change flows.
+
+## Expanded acceptance checklist
+
+Before calling the schema compatible, verify against a restored disposable Production export:
+
+1. admin_users.last_login_at exists and is writable.
+2. audit_logs.admin_user_id permits NULL, or change the failed-login audit insert and test its intended behavior.
+3. project_translations has a UNIQUE constraint/index on (project_id, locale) and the language/locale mapping is consistent.
+4. Every ON CONFLICT(...) target in the Worker matches a real UNIQUE/PRIMARY KEY constraint.
+5. Required nullable columns and status CHECK values match every API write path.
+6. Execute all relevant Worker SQL paths against the disposable copy; a schema-column audit alone is not enough.
+
+These are static contract findings, not evidence that Production currently lacks any particular column or constraint. No live database was queried or modified for this second pass.
