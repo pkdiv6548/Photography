@@ -54,7 +54,7 @@ function isSupabaseStorageConfigured(env: Env): boolean {
 }
 
 function supabaseObjectUrl(env: Env, key: string): string {
-  const base = env.SUPABASE_URL!.replace(/\\/$/, "");
+  const base = env.SUPABASE_URL!.replace(/\/$/, "");
   const bucket = encodeURIComponent(env.SUPABASE_STORAGE_BUCKET!);
   const objectPath = key.split("/").map((part) => encodeURIComponent(part)).join("/");
   return `${base}/storage/v1/object/${bucket}/${objectPath}`;
@@ -105,7 +105,7 @@ async function getMediaObject(env: Env, key: string): Promise<Response | null> {
 
 async function deleteMediaObject(env: Env, key: string): Promise<void> {
   if (isSupabaseStorageConfigured(env)) {
-    const url = `${env.SUPABASE_URL!.replace(/\\/$/, "")}/storage/v1/object/${encodeURIComponent(env.SUPABASE_STORAGE_BUCKET!)}`;
+    const url = `${env.SUPABASE_URL!.replace(/\/$/, "")}/storage/v1/object/${encodeURIComponent(env.SUPABASE_STORAGE_BUCKET!)}`;
     const response = await fetch(url, {
       method: "DELETE",
       headers: supabaseStorageHeaders(env, "application/json"),
