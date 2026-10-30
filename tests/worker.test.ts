@@ -20,8 +20,9 @@ test("readiness endpoint fails closed when D1 is not configured", async () => {
 test("readiness endpoint accepts the required legacy-compatible schema", async () => {
   const schema: Record<string, string[]> = {
     categories: ["id", "slug", "sort_order", "title_en", "title_hi"],
-    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at"],
+    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at", "demo_label"],
     project_translations: ["project_id", "locale", "title", "description"],
+    project_media: ["id", "project_id", "media_type", "preview_url", "original_key", "alt_en", "alt_hi", "sort_order", "is_public"],
     enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
     enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
     admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
@@ -54,8 +55,9 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
 test("readiness endpoint rejects a schema missing the enquiry consent column", async () => {
   const schema: Record<string, string[]> = {
     categories: ["id", "slug", "sort_order", "title_en", "title_hi"],
-    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at"],
+    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at", "demo_label"],
     project_translations: ["project_id", "locale", "title", "description"],
+    project_media: ["id", "project_id", "media_type", "preview_url", "original_key", "alt_en", "alt_hi", "sort_order", "is_public"],
     enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "status", "created_at", "updated_at"],
     enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
     admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
@@ -505,4 +507,129 @@ test("same-origin requests are allowed while cross-origin preflights are rejecte
   assert.equal(crossOriginPreflight.status, 403);
   assert.deepEqual(await crossOriginPreflight.json(), { error: "origin_not_allowed" });
   assert.equal(crossOriginPreflight.headers.get("X-Frame-Options"), "DENY");
+});
+
+
+test("initial admin setup explicitly assigns the owner role", async () => {
+  const statements: string[] = [];
+  const db = {
+    async batch(_statements: unknown[]) { return [{ success: true, meta: { changes: 1 } }, { success: true, meta: { changes: 1 } }, { success: true, meta: { changes: 1 } }]; },
+    prepare(query: string) {
+      statements.push(query);
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("INSERT INTO auth_rate_limits")) return { request_count: 1 } as T;
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 1 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/setup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-setup-secret": "test-setup-secret"
+      },
+      body: JSON.stringify({
+        email: "owner@example.test",
+        password: "a-long-test-password-123"
+      })
+    }),
+    { DB: db, ADMIN_SETUP_SECRET: "test-setup-secret" }
+  );
+  assert.equal(response.status, 201);
+  const insert = statements.find(query => query.includes("INSERT INTO admin_users"));
+  assert.ok(insert, "expected initial admin insert query");
+  assert.match(insert, /password_salt, role, is_active/);
+  assert.match(insert, /'owner'/);
+});
+
+
+test("initial admin setup refuses when no owner row is inserted", async () => {
+  const statements: string[] = [];
+  let batchCalled = false;
+  const db = {
+    async batch(batchStatements: unknown[]) {
+      batchCalled = true;
+      assert.equal(batchStatements.length, 3);
+      return [{ success: true, meta: { changes: 0 } }, { success: true, meta: { changes: 0 } }, { success: true, meta: { changes: 0 } }];
+    },
+    prepare(query: string) {
+      statements.push(query);
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("INSERT INTO auth_rate_limits")) return { request_count: 1 } as T;
+          return null as T | null;
+        },
+        async run() {
+          if (query.includes("INSERT INTO admin_users")) {
+            return { success: true, meta: { changes: 0 } };
+          }
+          return { success: true, meta: { changes: 1 } };
+        },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/setup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-setup-secret": "test-setup-secret"
+      },
+      body: JSON.stringify({
+        email: "owner@example.test",
+        password: "a-long-test-password-123"
+      })
+    }),
+    { DB: db, ADMIN_SETUP_SECRET: "test-setup-secret" }
+  );
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), { error: "initial_setup_already_completed" });
+  assert.equal(batchCalled, true, "setup writes must use one transactional D1 batch");
+  assert.equal(statements.some(query => query.includes("INSERT INTO audit_logs")), true);
+  assert.equal(statements.some(query => query.includes("UPDATE admin_setup")), true);
+});
+
+
+test("readiness endpoint rejects the repository's canonical migration schema until Worker queries are reconciled", async () => {
+  const schema: Record<string, string[]> = {
+    categories: ["id", "slug", "sort_order", "is_published", "created_at"],
+    category_translations: ["category_id", "language", "name"],
+    projects: ["id", "slug", "category_id", "cover_object_key", "featured", "status", "sort_order", "event_date", "location", "created_at", "updated_at"],
+    project_translations: ["project_id", "language", "title", "description", "alt_text"],
+    media: ["id", "project_id", "object_key", "media_type", "mime_type", "size_bytes", "width", "height", "duration_seconds", "is_public_preview", "sort_order", "created_at"],
+    enquiries: ["id", "name", "email", "phone", "service", "event_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
+    enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
+    admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
+    admin_sessions: ["id", "admin_user_id", "token_hash", "expires_at"],
+    admin_setup: ["id", "completed_at"],
+    auth_rate_limits: ["rate_key", "window_started_at", "request_count"],
+    audit_logs: ["id", "admin_user_id", "action", "target_type", "target_id", "created_at"],
+    site_content: ["page_slug", "draft_json", "published_json", "status", "updated_at"],
+    site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "created_at"]
+  };
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() {
+          const match = query.match(/PRAGMA table_info\(([^)]+)\)/);
+          if (match) return { success: true, results: (schema[match[1]] ?? []).map(name => ({ name })) as T[] };
+          return { success: true, results: [] as T[] };
+        }
+      };
+    }
+  };
+  const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "database_schema_incompatible" });
 });

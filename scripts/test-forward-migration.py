@@ -231,7 +231,13 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
         self.assertIn("role", admin_columns)
         self.assertEqual(
             self.db.execute("SELECT role FROM admin_users WHERE id='admin-1'").fetchone()[0],
-            "owner",
+            "editor",
+            "legacy admin accounts must receive least-privilege editor role, not owner privileges",
+        )
+        self.assertEqual(
+            admin_columns["role"]["dflt_value"],
+            "'editor'",
+            "newly added role column must default to editor",
         )
 
         table_names = {

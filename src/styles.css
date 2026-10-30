@@ -28,6 +28,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 img { display: block; max-width: 100%; }
 ::selection { color: #090b0d; background: var(--gold-bright); }
 .site-shell { overflow: clip; }
+.page-section { margin-top: clamp(48px, 7vw, 88px); padding-top: clamp(28px, 4vw, 48px); border-top: 1px solid var(--line-soft); }
+.page-section > h2 { max-width: 850px; margin: 0 0 18px; font-family: var(--serif); font-size: clamp(27px, 3.4vw, 42px); font-weight: 500; line-height: 1.15; letter-spacing: -.025em; }
+.page-section .section-subtitle { max-width: 780px; }
+.page-section ul { padding-left: 20px; color: var(--muted); font-size: 12px; line-height: 1.9; }
+.page-section .service-card h3 { margin: 14px 0 8px; }
+.enquiry-form { display: grid; gap: 18px; max-width: 850px; }
+.enquiry-form > label { display: grid; gap: 8px; color: #e6dfd2; font-size: 12px; }
+.enquiry-form input:not([type="checkbox"]), .enquiry-form select, .enquiry-form textarea { width: 100%; min-height: 44px; padding: 12px 13px; color: var(--text); background: #0b0d0f; border: 1px solid #45413a; border-radius: 2px; }
+.enquiry-form textarea { resize: vertical; }
+.enquiry-form .consent-row { display: flex; align-items: flex-start; gap: 10px; line-height: 1.7; }
+.enquiry-form .consent-row input { margin-top: 4px; accent-color: var(--gold); }
 .section-wrap { width: min(1320px, calc(100% - 64px)); margin-inline: auto; }
 .demo-banner { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 16px; background: #201b12; color: #e8c98d; border-bottom: 1px solid rgba(217,173,99,.27); font-size: 11px; letter-spacing: .025em; text-align: center; }
 .demo-banner svg { flex: 0 0 auto; }
@@ -43,6 +54,9 @@ img { display: block; max-width: 100%; }
 .main-nav a::after { position: absolute; right: 0; bottom: 19px; left: 0; height: 1px; background: var(--gold); content: ""; transform: scaleX(0); transform-origin: left; transition: transform .2s ease; }
 .main-nav a:hover, .main-nav a:focus-visible { color: #fff; }
 .main-nav a:hover::after, .main-nav a:focus-visible::after { transform: scaleX(1); }
+.main-nav a.admin-nav-link { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 11px; border: 1px solid rgba(217,173,99,.62); color: var(--gold-bright); white-space: nowrap; font-size: 11px; font-weight: 700; letter-spacing: .01em; }
+.main-nav a.admin-nav-link::after { display: none; }
+.main-nav a.admin-nav-link:hover, .main-nav a.admin-nav-link:focus-visible { color: #100e0a; background: var(--gold-bright); border-color: var(--gold-bright); }
 .header-actions { display: flex; align-items: center; gap: 14px; }
 .language-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 999px; color: #999; font-size: 11px; }
 .language-toggle button { padding: 4px 6px; color: #a6a8aa; background: transparent; border: 0; border-radius: 999px; cursor: pointer; font-size: 11px; }

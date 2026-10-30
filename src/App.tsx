@@ -229,6 +229,7 @@ export default function App() {
             const routes = ["/", "/portfolio", "/services", "/about", "/showreel", "/contact"];
             return <a key={routes[index]} href={routes[index]} onClick={() => setMenuOpen(false)}>{label}</a>;
           })}
+          <a className="admin-nav-link" href="/login.html" onClick={() => setMenuOpen(false)}>{language === "en" ? "Admin Login" : "एडमिन लॉगिन"}</a>
         </nav>
         <div className="header-actions">
           <div className="language-toggle" aria-label="Choose language">
@@ -395,6 +396,7 @@ export default function App() {
         <div className="footer-column"><h3>{t.quickLinks}</h3><a href="#home">{t.nav[0]}</a><a href="#categories">{t.nav[1]}</a><a href="#featured">{t.featuredTitle}</a><a href="#about">{t.nav[3]}</a></div>
         <div className="footer-column"><h3>{t.services}</h3>{services.map((item) => <button type="button" key={item.id} onClick={() => jumpToCategories(item.id.includes("editing") ? "editing" : item.id as PortfolioGroup)}>{item.title[language]}</button>)}</div>
         <div className="footer-column"><h3>{t.contact}</h3><a href="#contact">{t.contactSunil}</a><a href="#contact">WhatsApp · Phone</a><a href="#contact">Email · Instagram</a><span className="footer-muted">{language === "en" ? "Official details will be added before launch." : "लाइव करने से पहले असली विवरण जोड़े जाएँगे।"}</span></div>
+        <div className="footer-column"><h3>{language === "en" ? "Admin" : "एडमिन"}</h3><a href="/login.html">{language === "en" ? "Admin login" : "एडमिन लॉगिन"}</a><a href="/register.html">{language === "en" ? "Owner setup" : "ओनर सेटअप"}</a><a href="/admin.html">{language === "en" ? "Dashboard" : "डैशबोर्ड"}</a><span className="footer-muted">{language === "en" ? "Owner setup requires the private setup secret." : "ओनर सेटअप के लिए निजी सेटअप सीक्रेट ज़रूरी है।"}</span></div>
         <div className="footer-bottom"><span>© {new Date().getFullYear()} Golden Films</span><span>{t.allRights}</span><a href="#home">Back to top ↑</a></div>
       </footer>
     </div>
