@@ -41,3 +41,51 @@ SELECT e.table_name, e.column_name,
   END AS result
 FROM expected e
 ORDER BY e.table_name, e.column_name;
+
+-- Second result set: verify the unique/primary-key conflict targets used by
+-- Worker ON CONFLICT clauses. A column existing is not enough: the exact
+-- column set must be backed by a UNIQUE index or PRIMARY KEY.
+WITH expected_unique(table_name, target_columns) AS (
+  SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]')
+  FROM json_each('[
+    ["categories","slug"],
+    ["projects","slug"],
+    ["project_translations","project_id,locale"],
+    ["enquiry_rate_limits","ip_hash,window_start"],
+    ["admin_users","email"],
+    ["admin_sessions","token_hash"],
+    ["admin_setup","id"],
+    ["auth_rate_limits","rate_key"],
+    ["site_content","page_slug"],
+    ["gf_monthly_media_usage","month_key"]
+  ]')
+),
+actual_unique AS (
+  SELECT m.name AS table_name,
+         group_concat(
+           (SELECT group_concat(ii.name, ',')
+            FROM pragma_index_info(m.name) ii
+            ORDER BY ii.seqno),
+           '|'
+         ) AS index_column_sets
+  FROM sqlite_master m
+  WHERE m.type = 'index'
+    AND (m.sql IS NULL OR upper(m.sql) LIKE '%UNIQUE%')
+  GROUP BY m.name
+)
+SELECT e.table_name, e.target_columns,
+  CASE
+    WHEN NOT EXISTS (
+      SELECT 1
+      FROM pragma_index_list(e.table_name) il
+      WHERE il."unique" = 1
+        AND (
+          SELECT group_concat(ii.name, ',')
+          FROM pragma_index_info(il.name) ii
+          ORDER BY ii.seqno
+        ) = e.target_columns
+    ) THEN 'MISSING_UNIQUE_CONFLICT_TARGET'
+    ELSE 'UNIQUE_TARGET_PRESENT'
+  END AS result
+FROM expected_unique e
+ORDER BY e.table_name;
