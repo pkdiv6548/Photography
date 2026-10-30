@@ -1,3 +1,15 @@
+## Current continuation status — 2026-10-30
+
+- [x] PR #81 was merged into `main` as commit `696319ccfd5487dc1e6c6ea73be7f7d49a68e37a`: https://github.com/pkdiv6548/Photography/pull/81.
+- [x] Main-branch CI run #292 passed on the merge commit: https://github.com/pkdiv6548/Photography/actions/runs/41050547071.
+- [x] R2 integration work is explicitly on hold; no subscription or R2 enablement is planned. Real R2 upload/read/delete E2E remains deferred.
+- [ ] Admin setup/login/session/logout, authenticated CMS, and authorization-boundary browser/API E2E remain unverified.
+- [ ] Full Worker SQL/schema compatibility still needs real integration checks; a static migration-contract regression test is being added in PR #83.
+- [ ] Production migration rehearsal remains blocked until a verified production export/backup can be restored into a disposable D1 database. Do not run migrations against production or invent historical consent.
+- [ ] No production D1 writes, migrations, owner creation, secret/binding changes, or manual production deployment were performed.
+
+---
+
 ## Latest continuation update — 2026-10-30 (latest auth rate-limit regression CI and Preview)
 
 - [x] Latest PR head is `7a7e4926cf0b97deced68d63412c838f66ecf56a`; added regression coverage proving blocked admin login attempts return HTTP 429 before querying `admin_users` or creating `admin_sessions`.
