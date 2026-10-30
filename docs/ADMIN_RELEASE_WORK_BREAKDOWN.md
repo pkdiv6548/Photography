@@ -1,5 +1,14 @@
 # Admin Release Work Breakdown
 
+## Latest continuation update — 2026-10-30 (authenticated logout CI)
+
+- [x] Added an authenticated logout regression test that verifies session deletion, a logout audit insert, and expiration of the `__Host-gf_admin` cookie with `Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`, and `Max-Age=0`.
+- [x] Added the missing authenticated-session D1 test fixture so the logout test exercises the authenticated route path.
+- [x] GitHub Actions run #285 passed on head `6273866e635390bdb8154e6bd605ae913b8cc75c`: https://github.com/pkdiv6548/Photography/actions/runs/41047499943. All nine main workflow steps passed, including typecheck, Worker regression tests, both SQLite fixtures, and frontend build.
+- [ ] This CI pass does not prove Preview browser/API E2E or compatibility against a restored production D1 export.
+- [ ] Authenticated browser E2E, CMS E2E, isolated Preview R2 media E2E, and production-copy migration rehearsal remain release blockers. PR #81 stays Draft/unmerged; production D1 and production deployment remain untouched.
+
+
 ## Latest continuation update — 2026-10-30 (least-privilege role regression CI)
 
 - [x] CI run #280 passed on current application/test head `986374f9e72e613893b1cb5d5d27aff134d8da52`: https://github.com/pkdiv6548/Photography/actions/runs/41042707694.
