@@ -89,3 +89,13 @@ This list confirms the repository files only. It does **not** prove that product
 - The existing readiness checks are not a substitute for executing the endpoint SQL.
 - The migration chain must not be applied directly to the production database as a test.
 - Do not close or merge the admin-auth work until schema-backed integration tests and the preview routing check pass.
+
+## Execution checkpoint — 2026-10-30
+
+- GitHub Actions for this branch head `d6fe4cab474ca7596a4b5fad776510d6b783ed8e` completed successfully (run #237). This is CI evidence only; it does not establish compatibility with a restored production D1 database.
+- The readiness endpoint test uses a mocked D1 object whose `PRAGMA table_info` results are hand-authored. It proves the guard's expected-column behavior, not that migration SQL and Worker queries work together.
+- Static comparison confirms the fresh migration chain and Worker catalog/media queries still use different table/column contracts. In particular, the current migration chain defines `category_translations`, `projects.category_id`, `project_translations.language`, and `media`, while the Worker queries `categories.title_en/title_hi`, `projects.category_slug`, `project_translations.locale`, and `project_media`.
+- **First priority remaining:** add executable SQL integration coverage against (a) a database built from the exact migration chain and (b) a disposable database restored from a verified production export. Until the canonical schema adapter/migration passes both, the API/admin work is not release-ready.
+- **Safety block:** no production export or production write is being started as part of this step. A production export may affect availability, and the required restore target, integrity checks, and recovery plan must be confirmed first. Do not apply migrations `0001`–`0005` directly to production.
+- Acceptance criteria for this gate remain: all Worker SQL statements run against both fixtures; representative category/project/translation/media joins return correct English and Hindi data; foreign keys and indexes are verified; before/after table counts and key IDs are preserved; legacy consent is never fabricated; and admin setup/login/session/logout/CMS operations pass against real SQLite/D1-compatible constraints.
+
