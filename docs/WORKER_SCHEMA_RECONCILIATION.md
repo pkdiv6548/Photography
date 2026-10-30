@@ -99,3 +99,17 @@ This list confirms the repository files only. It does **not** prove that product
 - **Safety block:** no production export or production write is being started as part of this step. A production export may affect availability, and the required restore target, integrity checks, and recovery plan must be confirmed first. Do not apply migrations `0001`–`0005` directly to production.
 - Acceptance criteria for this gate remain: all Worker SQL statements run against both fixtures; representative category/project/translation/media joins return correct English and Hindi data; foreign keys and indexes are verified; before/after table counts and key IDs are preserved; legacy consent is never fabricated; and admin setup/login/session/logout/CMS operations pass against real SQLite/D1-compatible constraints.
 
+## Follow-up review of PR #81 candidate migration (2026-10-30)
+
+The separate draft PR #81 now contains a candidate `migrations/0006_worker_schema_compat.sql` on branch `feat/admin-auth-pages`. It adds Worker-facing columns and a `project_media` table after the canonical fresh-install migrations. This is progress toward fresh-schema compatibility, but it is not merged into `main` and is not a production forward migration.
+
+Review notes that must be validated by executable tests before this gate can close:
+
+1. The migration backfills `categories.title_en/title_hi` from `category_translations`. Verify every category has the intended English/Hindi translation and define behavior for missing translations; the added columns are nullable.
+2. The migration copies existing `media` rows into `project_media`. Verify stable IDs, public/private visibility, alt text, object-key routing, and idempotent re-runs; verify a second run does not silently skip changed source rows or duplicate media.
+3. The migration creates `idx_project_translations_project_locale` after copying `language` into `locale`. Verify duplicate or invalid legacy values fail with a clear preflight rather than causing an unexplained migration failure.
+4. The migration is a compatibility adapter for a fresh schema, not the legacy production forward migration. Production's non-null `enquiries.email`, missing consent/role/CMS columns, and unknown migration history still require a separate restored-export rehearsal.
+5. Run the entire Worker query contract—not just PRAGMA column checks—against the migrated fresh schema. Include category/project/media reads and writes, enquiry creation/status changes, owner setup/login/session/logout, CMS draft/revision/publish, audit logging, and rate-limit upserts.
+
+Until these checks pass on CI and a verified disposable legacy restore, PRs #81 and #63 should remain unmerged and production D1 untouched.
+
