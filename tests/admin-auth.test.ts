@@ -97,3 +97,17 @@ test("public content endpoint rejects unknown page slugs", async () => {
   assert.deepEqual(await response.json(), { error: "invalid_page" });
 });
 
+
+test("initial owner setup fails closed when transactional D1 batch is unavailable", async () => {
+  const db = mockDbWithAvailableAuthRateLimit();
+  const response = await worker.fetch(new Request("https://example.test/api/admin/setup", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-admin-setup-secret": "expected-secret"
+    },
+    body: JSON.stringify({ email: "owner@example.test", password: "long-secure-password-123" })
+  }), { DB: db, ADMIN_SETUP_SECRET: "expected-secret" });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "admin_setup_unavailable" });
+});
