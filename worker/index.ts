@@ -163,6 +163,36 @@ async function readLimitedBody(request: Request): Promise<{ text?: string; tooLa
   }
 }
 
+async function readLimitedBytes(request: Request, maxBytes: number): Promise<{ bytes?: Uint8Array; tooLarge?: boolean; invalid?: boolean }> {
+  if (!request.body) return { bytes: new Uint8Array() };
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return { tooLarge: true };
+      }
+      chunks.push(value);
+    }
+    const combined = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { bytes: combined };
+  } catch {
+    return { invalid: true };
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 const RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
 const RATE_LIMIT_MAX_REQUESTS = 5;
 
@@ -1075,10 +1105,21 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const admin = await currentAdmin(request, env);
     if (!admin) return json({ error: "unauthorized" }, 401);
     if (!isSupabaseStorageConfigured(env)) return json({ error: "media_storage_not_configured" }, 503);
+    const maxMultipartBytes = SUPABASE_MEDIA_MAX_FILE_BYTES + 64 * 1024;
     const declaredLength = Number(request.headers.get("content-length") ?? "0");
-    if (declaredLength > SUPABASE_MEDIA_MAX_FILE_BYTES + 64 * 1024) return json({ error: "file_too_large" }, 413);
+    if (declaredLength > maxMultipartBytes) return json({ error: "file_too_large" }, 413);
+    // Content-Length is optional on HTTP/2 and may be omitted by intermediaries.
+    // Enforce the cap while streaming before parsing multipart data to avoid unbounded buffering.
+    const multipartRead = await readLimitedBytes(request, maxMultipartBytes);
+    if (multipartRead.tooLarge) return json({ error: "file_too_large" }, 413);
+    if (multipartRead.invalid || !multipartRead.bytes) return json({ error: "invalid_multipart_form" }, 400);
+    const multipartBuffer = multipartRead.bytes.buffer.slice(
+      multipartRead.bytes.byteOffset,
+      multipartRead.bytes.byteOffset + multipartRead.bytes.byteLength
+    ) as ArrayBuffer;
+    const formRequest = new Request(request.url, { method: "POST", headers: request.headers, body: multipartBuffer });
     let form: FormData;
-    try { form = await request.formData(); } catch { return json({ error: "invalid_multipart_form" }, 400); }
+    try { form = await formRequest.formData(); } catch { return json({ error: "invalid_multipart_form" }, 400); }
     const file = form.get("file");
     const projectId = cleanText(form.get("projectId"), 80);
     const altEn = cleanText(form.get("altEn"), 250);
