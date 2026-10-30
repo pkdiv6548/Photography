@@ -65,3 +65,9 @@ These are static contract findings, not evidence that Production currently lacks
 - GitHub Actions run [#351](https://github.com/pkdiv6548/Photography/actions/runs/41140877461) completed successfully on the current documentation commit. The job passed Worker/frontend typecheck, Worker API regression tests, forward-migration fixture, fresh-schema contract fixture, and frontend production build.
 - Pull request #87 was rechecked: it remains open and Draft, with no submitted reviews or inline review threads returned by GitHub at the time of this check.
 - This follow-up is still fixture/build validation only. It does not resolve the production-schema mismatch or verify Preview secrets, admin login, or real Supabase Storage operations.
+
+
+## Quota audit coverage update (2026-10-31)
+
+- The read-only D1 schema audit now explicitly checks `gf_monthly_media_usage.updated_at` alongside `month_key` and `used_bytes`; all three are required by the Worker readiness/accounting contract.
+- This is a diagnostic-script coverage improvement only. It has not been run against a verified Production export or disposable restore, and it does not validate quota ledger CHECK constraints, types, or transactional behavior.
