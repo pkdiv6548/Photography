@@ -1,5 +1,19 @@
 ## Current continuation status — 2026-10-30
 
+- [x] PR #81 merged into `main` as `696319ccfd5487dc1e6c6ea73be7f7d49a68e37a`: https://github.com/pkdiv6548/Photography/pull/81.
+- [x] PR #83 merged schema-contract migration regression tests into `main` as `282943dcbeb4be472a4846180afdbe1f78a072dd`: https://github.com/pkdiv6548/Photography/pull/83.
+- [x] Main CI run #294 passed on the PR #83 merge commit: https://github.com/pkdiv6548/Photography/actions/runs/41051301016.
+- [x] Cloudflare Pages reports the production deployment for `282943d` as active. This is deployment status, not proof of authenticated browser/API E2E.
+- [x] R2 integration work is on hold. No subscription or R2 enablement is planned; real R2 upload/read/delete E2E remains deferred.
+- [ ] Owner setup, login/session/logout, authenticated CMS flows, and authorization-boundary browser/API E2E remain unverified.
+- [ ] Static schema-contract tests now cover the repository migration sequence, but do not replace full constraint/query checks against an actual restored production schema.
+- [ ] Production migration rehearsal remains blocked until a verified production export/backup can be restored into disposable D1. Never run candidate migrations against production or fabricate historical consent.
+- [ ] No production D1 writes, migrations, owner creation, secret/binding changes, or manual production deployment were performed.
+
+---
+
+## Current continuation status — 2026-10-30
+
 - [x] PR #81 was merged into `main` as commit `696319ccfd5487dc1e6c6ea73be7f7d49a68e37a`: https://github.com/pkdiv6548/Photography/pull/81.
 - [x] Main-branch CI run #292 passed on the merge commit: https://github.com/pkdiv6548/Photography/actions/runs/41050547071.
 - [x] R2 integration work is explicitly on hold; no subscription or R2 enablement is planned. Real R2 upload/read/delete E2E remains deferred.
