@@ -151,6 +151,16 @@ test("initial owner setup explicitly grants owner only when no admin exists and 
   assert.match(setupInsert, /'owner'/);
   assert.match(setupInsert, /NOT EXISTS \(SELECT 1 FROM admin_users\)/);
   assert.match(setupInsert, /completed_at IS NULL/);
+
+  const setupCompletion = db.statements.find(query => query.includes("UPDATE admin_setup"));
+  assert.ok(setupCompletion);
+  assert.match(setupCompletion, /completed_at IS NULL/);
+  assert.match(setupCompletion, /EXISTS \\(SELECT 1 FROM admin_users WHERE id = \\?\\)/);
+
+  const setupAudit = db.statements.find(query => query.includes("INSERT INTO audit_logs"));
+  assert.ok(setupAudit);
+  assert.match(setupAudit, /SELECT \\?/);
+  assert.match(setupAudit, /WHERE EXISTS \\(SELECT 1 FROM admin_users WHERE id = \\?\\)/);
 });
 
 test("initial owner setup rejects when the guarded owner insert creates no row", async () => {
