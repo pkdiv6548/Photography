@@ -34,6 +34,26 @@ function mockDbWithAvailableAuthRateLimit() {
 }
 
 
+function mockDbWithAuthenticatedSession() {
+  const queries: string[] = [];
+  return {
+    queries,
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { queries.push(query); return this; },
+        async first<T>() {
+          if (query.includes("JOIN admin_users u ON u.id = s.admin_user_id")) {
+            return { id: "admin-1", email: "owner@example.test", role: "owner" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 1 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+}
+
 function mockDbWithOwnerSetupBatch(insertChanges = 1) {
   const statements: string[] = [];
   return {
