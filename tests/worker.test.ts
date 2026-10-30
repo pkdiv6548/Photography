@@ -766,7 +766,7 @@ test("media upload enforces multipart size cap when Content-Length is omitted", 
       "Content-Type": "multipart/form-data; boundary=upload-boundary",
       Cookie: "__Host-gf_admin=test-session-token"
     },
-    body: oversizedBody
+    body: oversizedBody.buffer as ArrayBuffer
   });
   assert.equal(request.headers.has("content-length"), false);
   const response = await worker.fetch(request, {
