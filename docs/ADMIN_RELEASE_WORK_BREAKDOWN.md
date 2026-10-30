@@ -5,8 +5,18 @@
 - [x] Identified and corrected a least-privilege issue in the candidate production-copy migration: legacy `admin_users` now receive `role='editor'` by default instead of being silently elevated to owner.
 - [x] Updated the SQLite forward-migration fixture to assert that existing legacy accounts remain editors and that the new column default is editor.
 - [x] Documented the required deliberate, audited owner promotion path in `docs/PRODUCTION_D1_MIGRATION_GATE.md`.
-- [ ] Await CI for the migration/test change; do not treat the change as verified until the new run passes.
+- [x] GitHub Actions run #272 passed on current head `ba3238e8def242ef264105220b5010ff0cceb9a9`: https://github.com/pkdiv6548/Photography/actions/runs/41031213282. All 9 main steps passed, including frontend/Worker typecheck, Worker API regression tests, least-privilege forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend build.
 - [ ] Still requires testing against a verified export restored into a disposable D1 database. No production database was modified.
+
+## Latest continuation update — 2026-10-30 (migration security CI)
+
+- [x] Forward migration now defaults legacy admin accounts to `role='editor'`, not `owner`, avoiding silent privilege escalation.
+- [x] Regression fixture verifies both the migrated legacy account role and the column default are `editor`.
+- [x] CI run #272 passed on current head `ba3238e8def242ef264105220b5010ff0cceb9a9`: https://github.com/pkdiv6548/Photography/actions/runs/41031213282.
+- [x] All 9 main workflow steps completed successfully: dependency install, frontend/Worker typecheck, Worker API regression tests, forward-migration fixture, fresh-schema contract fixture, and frontend production build.
+- [ ] Still requires testing against a verified production export restored into a disposable D1 database; CI's synthetic SQLite fixture is not a substitute.
+- [ ] Live Preview authentication/API browser E2E remains unverified; the latest PR head is not confirmed deployed to Preview.
+- [ ] PR #81 remains Draft/unmerged. No production database write or migration was performed.
 
 ## Latest continuation update — 2026-10-30
 
