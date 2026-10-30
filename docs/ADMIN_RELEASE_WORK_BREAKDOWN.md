@@ -1,5 +1,15 @@
 # Admin Release Work Breakdown
 
+## Latest continuation update — 2026-10-30
+
+- [x] Fixed the contact form service values so the frontend submits the exact service slugs accepted by the Worker API; unsupported `Other` was removed from the selectable values.
+- [x] Latest code head: `e41a00255f9fb1288fad2f2d0af419a0ce9212f6`.
+- [x] GitHub Actions run #267 succeeded on this head: https://github.com/pkdiv6548/Photography/actions/runs/41017710044. All nine workflow steps completed, including dependency installation, frontend/Worker typecheck, Worker API regression tests, forward-migration fixture, fresh-schema contract fixture, and production frontend build.
+- [x] Cloudflare Pages Preview deployment for the contact-form fix was reported successful: https://15ebebd8.golden-films.pages.dev.
+- [ ] Do not treat a green build or successful static deployment as proof of live API functionality. The available HTTP probe environment blocks requests by policy; Preview browser/API E2E remains unverified.
+- [ ] Production-copy migration rehearsal, admin/auth/CMS E2E, and media tests with an isolated R2 binding remain release blockers.
+- [ ] PR #81 remains Draft and unmerged. No production database writes, migrations, secrets/bindings changes, or production deployment were performed.
+
 Status: in progress. This plan separates release blockers into small, verifiable gates. Production D1 and production deployment must remain unchanged until all required gates pass and explicit approval is received.
 
 ## Part 1 — Code and build contract (PASS)
