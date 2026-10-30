@@ -46,3 +46,25 @@ All placeholder/demo media must be clearly labeled as sample content and must no
 - The static Cloudflare Pages portfolio is deployed, but the Worker API is not deployed/connected to the production Pages routes. The Wrangler configuration references the D1 database, but Pages runtime D1 binding and `ADMIN_SETUP_SECRET` are not configured. The live D1 database has a legacy schema mismatch; do not apply migrations until a verified export has been restored and the exact forward migration passes against a disposable copy.
 - Admin authentication, owner/editor authorization, the CMS, revision history, admin audit view and optional R2 upload code exist in the repository, but they are not confirmed working in production because the API bridge and runtime bindings are not active. Password recovery, email verification and email notifications remain unimplemented.
 - No paid Cloudflare resource is enabled. The static site deployment does not establish API or database readiness.
+
+## Supabase Storage integration (free-budget target)
+
+The Worker can use the private Supabase Storage bucket `golden-films-media` for media. The bucket is configured for JPEG, PNG, WebP, GIF, MP4 and WebM, with a 50 MB provider-level file cap. The application currently enforces a stricter 20 MB per-file cap and a shared 100 MiB monthly upload budget in D1.
+
+Before enabling uploads in any environment, configure these as **server-side Pages Function secrets/environment variables** (never in Vite/client variables or committed files):
+
+- `SUPABASE_URL`: project URL for the Supabase project that owns the bucket.
+- `SUPABASE_SERVICE_ROLE_KEY`: server-only secret key. Do not expose it in the browser, repository, build output, or Postman shared environments.
+- `SUPABASE_STORAGE_BUCKET`: `golden-films-media`.
+
+The service-role key bypasses Storage RLS, so requests must only originate from the authenticated Worker. The bucket is private; the Worker checks the D1 project/media publication state before streaming a public portfolio asset. Draft media is not exposed by the public media route.
+
+The quota ledger is additive and lives in `gf_monthly_media_usage`; apply `migrations/0099_gf_monthly_media_usage.sql` to the target D1 database before enabling the new upload route. The quota is a shared 100 MiB per UTC calendar month across all admins. Failed uploads release their reservation. Provider free-tier storage and egress limits still apply, and free-tier terms can change.
+
+### Supabase / Worker rollout checklist
+
+1. Verify the intended Supabase project and confirm the `golden-films-media` bucket exists and is private.
+2. Add the three server-side variables above to both Preview and Production Pages Functions settings, using the same bucket-owning project.
+3. Apply the additive quota migration to the **preview/test D1 database first**, then test uploads, media reads, rejection at the monthly cap, and rollback on failure.
+4. Apply the same migration to production only after preview tests pass.
+5. Do not merge to `main` or claim launch readiness until the live API routing, D1 schema compatibility, admin setup secret, admin login, enquiry submission, media upload/read/delete, and Postman regression checks pass.
