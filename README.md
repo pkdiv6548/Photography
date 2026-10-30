@@ -68,3 +68,7 @@ The quota ledger is additive and lives in `gf_monthly_media_usage`; apply `migra
 3. Apply the additive quota migration to the **preview/test D1 database first**, then test uploads, media reads, rejection at the monthly cap, and rollback on failure.
 4. Apply the same migration to production only after preview tests pass.
 5. Do not merge to `main` or claim launch readiness until the live API routing, D1 schema compatibility, admin setup secret, admin login, enquiry submission, media upload/read/delete, and Postman regression checks pass.
+
+### Production D1 compatibility repair (manual review only)
+
+The inspected production D1 schema predates parts of the current Worker API contract. A reviewed additive repair draft is in `docs/production-d1-compatibility.sql`. It is intentionally **not** auto-run by deployment. Before executing it, export and verify a D1 backup, re-check that production schema matches the documented target, and review the existing admin accounts. Existing accounts default to the least-privilege `editor` role; promote only the verified owner account after review. Historical enquiries receive `consent = 0` because their prior consent was not recorded. Do not run the script if the live schema has changed, and do not merge the PR until post-migration API checks pass.
