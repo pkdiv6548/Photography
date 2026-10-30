@@ -28,7 +28,7 @@ Run the Worker locally only after configuring a test database and the required e
 - React + TypeScript + Vite frontend
 - Cloudflare Workers API
 - Cloudflare D1 for categories, projects, translations and enquiries
-- Cloudflare R2 for media only after free-tier limits and billing requirements are verified
+- Supabase Storage (private bucket) for media, with Cloudflare D1 enforcing the monthly upload quota
 - GitHub feature branches, pull requests and CI checks
 - Postman collection for API regression tests
 
@@ -44,7 +44,7 @@ All placeholder/demo media must be clearly labeled as sample content and must no
 
 - Real phone, WhatsApp, email and Instagram details have not been provided.
 - The static Cloudflare Pages portfolio is deployed, but the Worker API is not yet verified as connected to the production Pages routes. The Production Pages runtime is missing its D1 binding; `ADMIN_SETUP_SECRET` is not configured with a usable value, and `SUPABASE_SERVICE_ROLE_KEY` is missing from both Preview and Production. The preview D1 binding exists. Do not treat a successful frontend build as proof that the API is ready. The live D1 database has a legacy schema mismatch; do not apply migrations until a verified export has been restored and the exact forward migration passes against a disposable copy.
-- Admin authentication, owner/editor authorization, the CMS, revision history, admin audit view and optional R2 upload code exist in the repository, but they are not confirmed working in production because the API bridge and runtime bindings are not active. Password recovery, email verification and email notifications remain unimplemented.
+- Admin authentication, owner/editor authorization, the CMS, revision history, admin audit view and Supabase Storage upload code exist in the feature branch, but they are not confirmed working in Preview or Production until runtime secrets, API routing, D1 schema compatibility, login, and real upload/read/delete tests pass. Production Pages is missing its D1 binding. Password recovery, email verification and email notifications remain unimplemented.
 - No paid Cloudflare resource is enabled. The static site deployment does not establish API or database readiness.
 
 ## Supabase Storage integration (free-budget target)
