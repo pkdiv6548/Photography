@@ -33,6 +33,32 @@ function mockDbWithAvailableAuthRateLimit() {
   };
 }
 
+
+function mockDbWithOwnerSetupBatch(insertChanges = 1) {
+  const statements: string[] = [];
+  return {
+    statements,
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { statements.push(query); return this; },
+        async first<T>() {
+          if (query.includes("INSERT INTO auth_rate_limits")) return { request_count: 1 } as T;
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    },
+    async batch(_batchStatements: unknown[]) {
+      return [
+        { success: true, meta: { changes: insertChanges } },
+        { success: true, meta: { changes: insertChanges } },
+        { success: true, meta: { changes: insertChanges } }
+      ];
+    }
+  };
+}
+
 test("admin setup is unavailable until a server-side setup secret is configured", async () => {
   const response = await worker.fetch(new Request("https://example.test/api/admin/setup", {
     method: "POST",
@@ -110,4 +136,30 @@ test("initial owner setup fails closed when transactional D1 batch is unavailabl
   }), { DB: db, ADMIN_SETUP_SECRET: "expected-secret" });
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { error: "admin_setup_unavailable" });
+});
+
+test("initial owner setup explicitly grants owner only when no admin exists and setup is incomplete", async () => {
+  const db = mockDbWithOwnerSetupBatch(1);
+  const response = await worker.fetch(new Request("https://example.test/api/admin/setup", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-admin-setup-secret": "expected-secret" },
+    body: JSON.stringify({ email: "owner@example.test", password: "long-secure-password-123" })
+  }), { DB: db, ADMIN_SETUP_SECRET: "expected-secret" });
+  assert.equal(response.status, 201);
+  const setupInsert = db.statements.find(query => query.includes("INSERT INTO admin_users"));
+  assert.ok(setupInsert);
+  assert.match(setupInsert, /'owner'/);
+  assert.match(setupInsert, /NOT EXISTS \(SELECT 1 FROM admin_users\)/);
+  assert.match(setupInsert, /completed_at IS NULL/);
+});
+
+test("initial owner setup rejects when the guarded owner insert creates no row", async () => {
+  const db = mockDbWithOwnerSetupBatch(0);
+  const response = await worker.fetch(new Request("https://example.test/api/admin/setup", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-admin-setup-secret": "expected-secret" },
+    body: JSON.stringify({ email: "owner@example.test", password: "long-secure-password-123" })
+  }), { DB: db, ADMIN_SETUP_SECRET: "expected-secret" });
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), { error: "initial_setup_already_completed" });
 });
