@@ -741,7 +741,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!env.DB || (!isSupabaseStorageConfigured(env) && !env.MEDIA_BUCKET)) return json({ error: "media_storage_not_configured" }, 503);
     let key = "";
     try { key = decodeURIComponent(url.pathname.slice("/api/media/".length)); } catch { return json({ error: "media_not_found" }, 404); }
-    if (!/^projects\\/[0-9a-f-]{36}\\/[0-9a-f-]{36}\\.(?:jpg|jpeg|png|webp|gif|mp4|webm)$/i.test(key)) return json({ error: "media_not_found" }, 404);
+    if (!/^projects\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:jpg|jpeg|png|webp|gif|mp4|webm)$/i.test(key)) return json({ error: "media_not_found" }, 404);
     try {
       const allowed = await env.DB.prepare(
         "SELECT m.media_type FROM project_media m JOIN projects p ON p.id = m.project_id " +
