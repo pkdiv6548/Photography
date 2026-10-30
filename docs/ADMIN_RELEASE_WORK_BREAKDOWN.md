@@ -5,8 +5,12 @@ Status: in progress. This plan separates release blockers into small, verifiable
 ## Part 1 — Code and build contract (PASS)
 - [x] Route Pages Functions `/api/*` through the shared Worker implementation.
 - [x] Include Pages Functions in Worker TypeScript validation.
-- [x] Pass frontend build, Worker regression tests, fresh-schema fixture, and forward-migration fixture in CI run #249.
+- [x] Pass frontend and Worker TypeScript checks, Worker regression tests, fresh-schema fixture, forward-migration fixture, and frontend production build in CI run #257 (commit `899319f`, run ID `41010260519`).
 - [x] Confirm the latest preview deployment completed and reports Pages Functions enabled.
+
+## Latest CI verification
+- [x] CI run #257 passed all 9 main workflow steps on head `899319fccb156e877d198c6e20bb11b0f0d0d9fb`.
+- [x] The transactional initial-owner setup test expectations were corrected; the regression suite now passes on this head.
 
 ## Part 2 — Isolated preview database and config (CONFIGURED; LIVE API VERIFICATION BLOCKED)
 - [x] Create separate D1 database `golden-films-preview-test`; do not use production D1.
