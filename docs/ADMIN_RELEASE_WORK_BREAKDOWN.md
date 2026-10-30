@@ -5,14 +5,21 @@ Status: in progress. This plan separates release blockers into small, verifiable
 ## Part 1 — Code and build contract (PASS)
 - [x] Route Pages Functions `/api/*` through the shared Worker implementation.
 - [x] Include Pages Functions in Worker TypeScript validation.
-- [x] Pass frontend and Worker TypeScript checks, Worker regression tests, fresh-schema fixture, forward-migration fixture, and frontend production build in CI run #259 on current head `3c2940e` (run ID `41010685254`).
+- [x] Pass frontend and Worker TypeScript checks, Worker regression tests, fresh-schema fixture, forward-migration fixture, and frontend production build through CI run #261 on head `8098179` (run ID `41011104006`).
 - [x] Confirm the latest preview deployment completed and reports Pages Functions enabled.
 
-## Latest CI verification
-- [x] CI run #259 passed all 9 main workflow steps on current head `3c2940e00f461f78c8e7726502e9d99c1c7d9c35` (run ID `41010685254`).
+## Earlier CI verification
+- [x] CI run #259 passed all 9 main workflow steps on code head `3c2940e00f461f78c8e7726502e9d99c1c7d9c35` (run ID `41010685254`).
 - [x] CI run #258 passed all 9 main workflow steps on prior head `e511861368119625ed05e26df90acbdb3cdb057c` (run ID `41010442022`).
 - [x] CI run #257 passed all 9 main workflow steps on code head `899319fccb156e877d198c6e20bb11b0f0d0d9fb` (run ID `41010260519`).
 - [x] The transactional initial-owner setup test expectations were corrected; the regression suite passes on the code head.
+
+## Latest CI verification (2026-10-30)
+- [x] CI run #261 passed all main workflow steps on head `8098179b39e243473303a79a638d81c564dbea93` (run ID `41011104006`): https://github.com/pkdiv6548/Photography/actions/runs/41011104006.
+- [x] The translation-save SQL now sets both legacy `language` and `locale` columns to satisfy the original schema's `language NOT NULL` constraint.
+- [x] CI run #260 passed on documentation head `483a8f4ab0f840de17f4c4d804abdc083d406171` (run ID `41011057822`).
+- [x] CI run #259 passed on prior code head `3c2940e00f461f78c8e7726502e9d99c1c7d9c35` (run ID `41010685254`).
+- [ ] Live Preview API and browser E2E remain unverified; deployment is still on older code head `b9c5301`.
 
 ## Part 2 — Isolated preview database and config (CONFIGURED; LIVE API VERIFICATION BLOCKED)
 - [x] Create separate D1 database `golden-films-preview-test`; do not use production D1.
