@@ -27,14 +27,15 @@ ALTER TABLE projects ADD COLUMN project_date TEXT;
 ALTER TABLE projects ADD COLUMN demo_label TEXT NOT NULL DEFAULT '';
 
 UPDATE projects
-SET category_slug = (SELECT slug FROM categories WHERE categories.id = projects.category_id),
+SET category_slug = COALESCE(category_slug, (SELECT slug FROM categories WHERE categories.id = projects.category_id)),
     cover_image_url = COALESCE(cover_image_url, '/api/media/' || cover_object_key),
     is_featured = featured,
-    project_date = event_date
-WHERE category_slug IS NULL OR cover_image_url IS NULL;
+    project_date = event_date;
 
 ALTER TABLE project_translations ADD COLUMN locale TEXT;
 UPDATE project_translations SET locale = language WHERE locale IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_project_translations_project_locale
+  ON project_translations(project_id, locale);
 
 ALTER TABLE enquiries ADD COLUMN preferred_date TEXT;
 UPDATE enquiries SET preferred_date = event_date WHERE preferred_date IS NULL;
