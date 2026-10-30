@@ -712,3 +712,32 @@ test("public media route does not fetch private storage for unpublished media", 
     globalThis.fetch = originalFetch;
   }
 });
+
+test("media route fails closed without Supabase config instead of falling back to R2", async () => {
+  let r2ReadAttempted = false;
+  const env = {
+    DB: {
+      prepare(_query: string) {
+        return {
+          bind(..._args: unknown[]) { return this; },
+          async first<T>() { return { media_type: "image" } as T; },
+        };
+      },
+    },
+    MEDIA_BUCKET: {
+      async get(_key: string) {
+        r2ReadAttempted = true;
+        return null;
+      },
+      async put() { throw new Error("R2 must not be used"); },
+      async delete() { throw new Error("R2 must not be used"); },
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/media/projects/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.jpg"),
+    env as never,
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "media_storage_not_configured" });
+  assert.equal(r2ReadAttempted, false);
+});
