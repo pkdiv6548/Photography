@@ -1,6 +1,6 @@
 # Worker / D1 Schema Contract
 
-Status: **audit baseline only — not a migration and not approval to change production**.
+Status: **canonical Worker contract selected for fresh installs; production migration remains blocked pending an isolated verified restore**.
 
 This document separates the schema the current Worker expects from the schema created by repository migrations. Resolve this contract before applying any migration or enabling the API against production.
 
@@ -53,8 +53,10 @@ Migrations 0002–0005 do not reconcile the category/project/translation/media m
 9. **Preview binding test:** verify the deployed preview uses the expected Worker, D1 binding, and setup secret without exposing secrets.
 10. **Production gate:** no production migration, secret/binding changes, merge, or activation until tests pass and explicit approval is recorded.
 
-## 4. Decision
+## 4. Selected approach and guardrails
 
-Do not treat the existing migration filenames as proof that they form a compatible schema for the current Worker. Choose one canonical data model, then either (a) revise migrations for fresh installs and design a forward-only data-preserving migration for legacy data, or (b) change the Worker to match the canonical migration schema. Validate both paths on disposable databases before selecting one.
+The Worker SQL contract is the canonical model for fresh installs. Migration `0006_worker_schema_compat.sql` adds the Worker-facing category, project, translation, enquiry-date, and media fields after migrations `0001`–`0005`, backfilling values from the legacy baseline tables without deleting or rewriting the original `category_translations` or `media` tables. A unique `(project_id, locale)` index is required because Worker project saves use `ON CONFLICT(project_id, locale)`.
 
-This file is a review artifact only. It performs no database operations.
+This migration is **fresh-install/repository-sequence only**. It is not approved for production D1. Production has no trusted `d1_migrations` history and has legacy schema differences (including consent and nullable-email concerns); production requires a separately reviewed forward-only migration tested against a verified backup restored into a disposable database. Never fabricate historical consent. Do not bind production D1 to a preview or execute this migration against production as a shortcut.
+
+Validation required before merge/release remains: (a) CI fresh-schema SQLite migration fixture passes, (b) Worker tests pass, (c) preview API and D1 bindings are verified end-to-end, and (d) production migration/release has explicit approval. This document and migration do not perform any production database operations.
