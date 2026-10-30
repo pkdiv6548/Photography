@@ -1151,17 +1151,20 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         await putMediaObject(env, key, file.stream(), file.type.toLowerCase());
         objectUploaded = true;
         const previewUrl = "/api/media/" + key;
-        await env.DB.prepare(
-          "INSERT INTO project_media (id, project_id, media_type, preview_url, original_key, alt_en, alt_hi, sort_order, is_public) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        ).bind(id, projectId, mediaType, previewUrl, key, altEn, altHi, sortOrder, isPublic ? 1 : 0).run();
+        const statements = [
+          env.DB.prepare(
+            "INSERT INTO project_media (id, project_id, media_type, preview_url, original_key, alt_en, alt_hi, sort_order, is_public) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ).bind(id, projectId, mediaType, previewUrl, key, altEn, altHi, sortOrder, isPublic ? 1 : 0),
+        ];
         if (isCover) {
-          await env.DB.prepare("UPDATE projects SET cover_image_url = ?, updated_at = datetime('now') WHERE id = ?")
-            .bind(previewUrl, projectId).run();
+          statements.push(env.DB.prepare("UPDATE projects SET cover_image_url = ?, updated_at = datetime('now') WHERE id = ?")
+            .bind(previewUrl, projectId));
         }
-        await env.DB.prepare(
+        statements.push(env.DB.prepare(
           "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, ?, 'media', ?)"
-        ).bind(crypto.randomUUID(), admin.id, isPublic ? "media_uploaded_public" : "media_uploaded_draft", id).run();
+        ).bind(crypto.randomUUID(), admin.id, isPublic ? "media_uploaded_public" : "media_uploaded_draft", id));
+        await env.DB.batch(statements);
         return json({ ok: true, id, previewUrl, mediaType, isPublic, isCover, monthlyLimitBytes: MONTHLY_MEDIA_UPLOAD_LIMIT_BYTES }, 201);
       } catch (error) {
         if (objectUploaded) await deleteMediaObject(env, key).catch(() => undefined);
