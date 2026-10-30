@@ -495,7 +495,9 @@ function ShowreelContentPage() {
 
 function ContactContentPage() {
   const content = usePublishedPageContent("contact");
-  const [service, setService] = useState(new URLSearchParams(window.location.search).get("service") || "");
+  const allowedServices = [{ value: "photography", label: "Photography" }, { value: "videography", label: "Videography" }, { value: "photo-editing", label: "Photo editing" }, { value: "video-editing", label: "Video editing" }];
+  const requestedService = new URLSearchParams(window.location.search).get("service") || "";
+  const [service, setService] = useState(allowedServices.some(item => item.value === requestedService) ? requestedService : "");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState("");
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -518,7 +520,7 @@ function ContactContentPage() {
       <label>Name<input name="name" required maxLength={120} autoComplete="name"/></label>
       <label>Email<input name="email" type="email" maxLength={254} autoComplete="email"/></label>
       <label>Phone / WhatsApp<input name="phone" type="tel" maxLength={40} autoComplete="tel"/></label>
-      <label>Service<select value={service} onChange={e=>setService(e.target.value)} required><option value="">Choose a service</option>{["Photography","Videography","Photo editing","Video editing","Other"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
+      <label>Service<select value={service} onChange={e=>setService(e.target.value)} required><option value="">Choose a service</option>{allowedServices.map(item=><option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
       <label>Project details<textarea name="message" required minLength={10} maxLength={3000} rows={6} placeholder="Date, location, project goals, deliverables and budget range…"/></label>
       <label className="consent-row"><input type="checkbox" name="consent" required/> I agree that Golden Films may use these details to respond to my enquiry.</label>
       <button className="button button-gold" type="submit" disabled={sending}>{sending?"Sending enquiry…":"Send enquiry"} <ArrowRight size={15}/></button>
