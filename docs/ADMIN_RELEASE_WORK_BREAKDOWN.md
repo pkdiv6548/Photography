@@ -1,14 +1,15 @@
-## Release gate snapshot — 2026-10-30 (PR #85)
+## Release gate snapshot — 2026-10-30 (updated after PR #85 merge)
 
 - [x] PR #81 (admin setup/login/dashboard implementation) is merged into `main`; merge status does not prove the live admin flows are verified.
 - [x] PR #83 (static schema-contract migration tests) is merged into `main`; this does not replace executing Worker SQL against fresh and restored legacy schemas.
 - [x] PR #84 (schema reconciliation/release-gate documentation) is merged into `main`.
-- [ ] PR #85 proposes corrections to stale schema-gate documentation; it remains open pending checks/review.
+- [x] PR #85 (schema-gate documentation corrections) is merged into `main` as `2bbdf4e287e6161392db1b4f1e5368a63a898f80`; its pre-merge CI passed, but this documentation change does not verify runtime behavior.
 - [ ] Authenticated browser/API E2E for owner setup, login, session, logout, CMS revision/publish, and authorization boundaries remains unverified.
 - [ ] Production D1 migration rehearsal remains blocked until a verified production export is restored into a disposable D1 and preservation/integrity checks pass. Do not run migrations against production.
 - [ ] Pages API bridge and binding/routing verification remain separate release gates; a successful Pages deployment is not proof the routes work.
 - [x] R2 upload/read/delete E2E is explicitly on hold per project direction; do not enable R2 or make subscription purchases.
 - [x] No production D1 writes/migrations, owner creation, secret/binding changes, or manual production deployment were performed in this continuation.
+- [x] PR #85 was squash-merged after its checks passed before merge; no workflow run was returned for the merge commit itself.
 
 ---
 
