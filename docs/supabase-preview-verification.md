@@ -20,7 +20,7 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 
 **Configuration and read-only D1 schema audit (Cloudflare API, 2026-10-30):**
 
-- [x] Latest active Preview deployment reported by Cloudflare on 2026-10-30 at 15:46 UTC: `https://6e9b2f25.golden-films.pages.dev`, commit `1f0ac24fa891c85afd6888493058136a0b7e95bf`. Deployment success confirms build/deploy only, not API readiness.
+- [x] Use the branch Preview alias `https://feat-supabase-storage-free-t.golden-films.pages.dev` to follow the latest successful deployment for this feature branch. Individual immutable deployment URLs change after each new commit. Deployment success confirms build/deploy only, not API readiness.
 - [x] Preview D1 binding `DB` is configured to database `golden-films-preview-test` (`21f470cb-776a-4eb2-816e-16605139299a`).
 - [x] Read-only schema inspection confirms Preview has `gf_monthly_media_usage`, `admin_users.role`, `enquiries.consent`, `site_content`, and `site_content_revisions`.
 - [x] Preview non-secret variables `SUPABASE_URL` and `SUPABASE_STORAGE_BUCKET` are configured.
