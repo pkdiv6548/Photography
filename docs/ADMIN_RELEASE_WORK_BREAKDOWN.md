@@ -1,3 +1,15 @@
+## Latest continuation update — 2026-10-30 (latest auth rate-limit regression CI and Preview)
+
+- [x] Latest PR head is `7a7e4926cf0b97deced68d63412c838f66ecf56a`; added regression coverage proving blocked admin login attempts return HTTP 429 before querying `admin_users` or creating `admin_sessions`.
+- [x] GitHub Actions `build-and-test` passed for this exact head (run #41048938653): https://github.com/pkdiv6548/Photography/actions/runs/41048938653.
+- [x] Cloudflare Pages Preview deployment succeeded for this exact head. Preview URL: https://bb6a6963.golden-films.pages.dev; branch alias: https://feat-admin-auth-pages.golden-films.pages.dev.
+- [x] PR #81 remains open and Draft; no merge was performed.
+- [ ] Green CI and a successful static deployment do not establish live API/browser E2E. Owner setup, login/session/logout, authenticated CMS flows, and authorization boundaries still need permitted browser/API verification.
+- [ ] Isolated Preview R2 upload/retrieval/deletion remains unverified.
+- [ ] Production-copy migration rehearsal remains blocked until a verified export/backup can be restored to a disposable database and the candidate forward migration, constraints, indexes, foreign keys, data preservation, and recovery are verified.
+- [ ] Direct HTTP probes from this execution environment remain unavailable; do not report endpoint behavior as verified based only on deployment success.
+- [ ] No production database writes, migrations, secrets/binding changes, or production deployment were performed.
+
 # Admin Release Work Breakdown
 
 ## Latest continuation update — 2026-10-30 (CI #287 and current Preview deployment)
