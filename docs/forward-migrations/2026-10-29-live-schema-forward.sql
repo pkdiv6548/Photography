@@ -37,8 +37,10 @@ ALTER TABLE enquiries_new RENAME TO enquiries;
 CREATE INDEX IF NOT EXISTS idx_enquiries_status_created
   ON enquiries(status, created_at DESC);
 
+-- Least privilege: existing accounts become editors, not owners. Initial owner
+-- setup explicitly inserts role='owner' only when no account exists.
 ALTER TABLE admin_users
-  ADD COLUMN role TEXT NOT NULL DEFAULT 'owner' CHECK (role IN ('owner', 'editor'));
+  ADD COLUMN role TEXT NOT NULL DEFAULT 'editor' CHECK (role IN ('owner', 'editor'));
 
 CREATE TABLE IF NOT EXISTS site_content (
   page_slug TEXT PRIMARY KEY CHECK (page_slug IN ('home', 'about', 'services', 'showreel', 'contact')),
@@ -64,7 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_site_content_revisions_page_created
 
 -- Post-migration verification:
 -- PRAGMA table_info(enquiries) must show email with notnull=0 and consent INTEGER NOT NULL DEFAULT 0.
--- PRAGMA table_info(admin_users) must show role TEXT NOT NULL DEFAULT 'owner'.
+-- PRAGMA table_info(admin_users) must show role TEXT NOT NULL DEFAULT 'editor';
 -- SELECT COUNT(*) FROM enquiries WHERE consent NOT IN (0,1) must return 0.
 -- SELECT name FROM sqlite_master WHERE type='table' AND name IN ('site_content','site_content_revisions')
 -- must return both tables.
