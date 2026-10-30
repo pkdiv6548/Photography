@@ -64,6 +64,14 @@ CREATE TABLE IF NOT EXISTS site_content_revisions (
 CREATE INDEX IF NOT EXISTS idx_site_content_revisions_page_created
   ON site_content_revisions(page_slug, created_at DESC);
 
+-- Shared 100 MiB UTC-calendar-month media-upload quota ledger.
+-- This records newly uploaded bytes; deleting media does not retroactively restore quota.
+CREATE TABLE IF NOT EXISTS gf_monthly_media_usage (
+  month_key TEXT PRIMARY KEY,
+  used_bytes INTEGER NOT NULL DEFAULT 0 CHECK (used_bytes >= 0),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Post-migration verification:
 -- PRAGMA table_info(enquiries) must show email with notnull=0 and consent INTEGER NOT NULL DEFAULT 0.
 -- PRAGMA table_info(admin_users) must show role TEXT NOT NULL DEFAULT 'editor';
