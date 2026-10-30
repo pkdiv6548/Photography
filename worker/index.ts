@@ -20,6 +20,7 @@ interface StaticAssetsBinding {
   fetch(request: Request): Promise<Response>;
 }
 
+// Media storage is Supabase-only. Do not add an R2 fallback: this project targets a zero-billing deployment.
 interface Env {
   DB?: D1Binding;
   ASSETS?: StaticAssetsBinding;
