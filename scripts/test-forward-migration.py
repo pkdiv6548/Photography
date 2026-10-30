@@ -268,6 +268,18 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
         }
         self.assertIn("idx_site_content_revisions_page_created", cms_indexes)
 
+        quota_columns = {
+            row["name"] for row in self.db.execute("PRAGMA table_info(gf_monthly_media_usage)")
+        }
+        self.assertTrue(
+            {"month_key", "used_bytes", "updated_at"}.issubset(quota_columns),
+            "monthly media quota ledger must expose the columns used by the Worker",
+        )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                "INSERT INTO gf_monthly_media_usage (month_key, used_bytes) VALUES ('2026-10', -1)"
+            )
+
         # Verify the new constraints, not only the resulting column names.
         self.db.execute(
             "INSERT INTO site_content (page_slug, draft_json, published_json, status) "
