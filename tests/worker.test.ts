@@ -780,3 +780,78 @@ test("media upload enforces multipart size cap when Content-Length is omitted", 
   assert.equal(response.status, 413);
   assert.deepEqual(await response.json(), { error: "file_too_large" });
 });
+
+test("media upload rejects a JPEG MIME type when the file signature is not JPEG", async () => {
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob(["this is not a JPEG"], { type: "image/jpeg" }), "not-a-photo.jpg");
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/media/upload", {
+      method: "POST",
+      headers: { Cookie: "__Host-gf_admin=test-session-token" },
+      body: form
+    }),
+    {
+      DB: db,
+      SUPABASE_URL: "https://photography-test.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+      SUPABASE_STORAGE_BUCKET: "golden-films-media"
+    } as never
+  );
+  assert.equal(response.status, 415);
+  assert.deepEqual(await response.json(), { error: "file_signature_mismatch" });
+});
+
+test("media upload rejects unsupported MIME types before project or storage writes", async () => {
+  let projectQueryAttempted = false;
+  const db = {
+    prepare(query: string) {
+      if (query.includes("SELECT id, status FROM projects")) projectQueryAttempted = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob(["<svg></svg>"], { type: "image/svg+xml" }), "vector.svg");
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/media/upload", {
+      method: "POST",
+      headers: { Cookie: "__Host-gf_admin=test-session-token" },
+      body: form
+    }),
+    {
+      DB: db,
+      SUPABASE_URL: "https://photography-test.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+      SUPABASE_STORAGE_BUCKET: "golden-films-media"
+    } as never
+  );
+  assert.equal(response.status, 415);
+  assert.equal(projectQueryAttempted, false);
+  assert.equal((await response.json() as { error: string }).error, "unsupported_media_type");
+});
