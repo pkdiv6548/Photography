@@ -16,11 +16,11 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 
 ## Current prerequisite status
 
-**Latest automated verification:** GitHub Actions run `41080270015` (`Golden Films checks`) completed with conclusion `success` for commit `8eae96ac24e4ba828be34e25aa2c327b565b0cfc`. This is CI evidence only; it does not confirm live Supabase Storage behavior.
+**Latest automated verification:** GitHub Actions run `41083836266` (run #338, `Golden Films checks`) completed with conclusion `success` for commit `1f0ac24fa891c85afd6888493058136a0b7e95bf`. This is CI evidence only; it does not confirm live Supabase Storage behavior.
 
 **Configuration and read-only D1 schema audit (Cloudflare API, 2026-10-30):**
 
-- [x] Latest successful Preview deployment reported by Cloudflare on 2026-10-30 at 15:26 UTC: `https://fc8d52f5.golden-films.pages.dev`, commit `5a4e401ecf0f8b3e4c0fa9990b6e16dd993dfcda`. Deployment success confirms build/deploy only, not API readiness.
+- [x] Latest active Preview deployment reported by Cloudflare on 2026-10-30 at 15:46 UTC: `https://6e9b2f25.golden-films.pages.dev`, commit `1f0ac24fa891c85afd6888493058136a0b7e95bf`. Deployment success confirms build/deploy only, not API readiness.
 - [x] Preview D1 binding `DB` is configured to database `golden-films-preview-test` (`21f470cb-776a-4eb2-816e-16605139299a`).
 - [x] Read-only schema inspection confirms Preview has `gf_monthly_media_usage`, `admin_users.role`, `enquiries.consent`, `site_content`, and `site_content_revisions`.
 - [x] Preview non-secret variables `SUPABASE_URL` and `SUPABASE_STORAGE_BUCKET` are configured.
