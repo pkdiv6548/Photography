@@ -43,6 +43,9 @@ img { display: block; max-width: 100%; }
 .main-nav a::after { position: absolute; right: 0; bottom: 19px; left: 0; height: 1px; background: var(--gold); content: ""; transform: scaleX(0); transform-origin: left; transition: transform .2s ease; }
 .main-nav a:hover, .main-nav a:focus-visible { color: #fff; }
 .main-nav a:hover::after, .main-nav a:focus-visible::after { transform: scaleX(1); }
+.main-nav a.admin-nav-link { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 11px; border: 1px solid rgba(217,173,99,.62); color: var(--gold-bright); white-space: nowrap; font-size: 11px; font-weight: 700; letter-spacing: .01em; }
+.main-nav a.admin-nav-link::after { display: none; }
+.main-nav a.admin-nav-link:hover, .main-nav a.admin-nav-link:focus-visible { color: #100e0a; background: var(--gold-bright); border-color: var(--gold-bright); }
 .header-actions { display: flex; align-items: center; gap: 14px; }
 .language-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 999px; color: #999; font-size: 11px; }
 .language-toggle button { padding: 4px 6px; color: #a6a8aa; background: transparent; border: 0; border-radius: 999px; cursor: pointer; font-size: 11px; }
