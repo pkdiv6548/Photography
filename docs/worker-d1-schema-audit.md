@@ -71,3 +71,11 @@ These are static contract findings, not evidence that Production currently lacks
 
 - The read-only D1 schema audit now explicitly checks `gf_monthly_media_usage.updated_at` alongside `month_key` and `used_bytes`; all three are required by the Worker readiness/accounting contract.
 - This is a diagnostic-script coverage improvement only. It has not been run against a verified Production export or disposable restore, and it does not validate quota ledger CHECK constraints, types, or transactional behavior.
+
+## Follow-up verification (2026-10-31, commit 890aaf4)
+
+- GitHub Actions run [#355](https://github.com/pkdiv6548/Photography/actions/runs/41141397630) completed successfully for commit `890aaf4b261ebc2508ebb40685950955a26acfe2`. All job steps passed: dependency installation, frontend/Worker typecheck, Worker API regression tests, forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend production build.
+- A static comparison of Worker `ON CONFLICT(...)` clauses against `scripts/audit-d1-schema.sql` found each target represented in the audit's expected unique-target list: `gf_monthly_media_usage(month_key)`, `enquiry_rate_limits(ip_hash, window_start)`, `auth_rate_limits(rate_key)`, `site_content(page_slug)`, category/project `slug`, and `project_translations(project_id, locale)`. The audit also checks unique targets used by admin tables.
+- The above is a source-level coverage check only. It does not execute the audit SQL against the real D1 schema and does not establish that the expected unique indexes exist in Production.
+- Pull request #87 remains open and Draft; no submitted reviews or inline review threads were returned in this check.
+- No Production database, secret, or deployment setting was changed. Live Preview/Production API behavior and Supabase Storage upload/read/delete remain unverified.
