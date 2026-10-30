@@ -34,6 +34,26 @@ function mockDbWithAvailableAuthRateLimit() {
 }
 
 
+function mockDbWithBlockedAuthRateLimit() {
+  const queries: string[] = [];
+  return {
+    queries,
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { queries.push(query); return this; },
+        async first<T>() {
+          if (query.includes("INSERT INTO auth_rate_limits")) {
+            return { request_count: 11 } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+}
+
 function mockDbWithAuthenticatedSession() {
   const queries: string[] = [];
   return {
@@ -113,6 +133,21 @@ test("admin login does not accept GET requests", async () => {
   const response = await worker.fetch(new Request("https://example.test/api/admin/login"), { DB: mockDb() });
   assert.equal(response.status, 405);
   assert.equal(response.headers.get("Allow"), "POST");
+});
+
+test("admin login rate limit blocks attempts before querying credentials", async () => {
+  const db = mockDbWithBlockedAuthRateLimit();
+  const response = await worker.fetch(new Request("https://example.test/api/admin/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "owner@example.test", password: "not-the-password" })
+  }), { DB: db });
+
+  assert.equal(response.status, 429);
+  assert.deepEqual(await response.json(), { error: "temporarily_unavailable" });
+  assert.ok(db.queries.some(query => query.includes("INSERT INTO auth_rate_limits")));
+  assert.equal(db.queries.some(query => query.includes("FROM admin_users")), false);
+  assert.equal(db.queries.some(query => query.includes("INSERT INTO admin_sessions")), false);
 });
 
 test("admin logout requires an authenticated session", async () => {
