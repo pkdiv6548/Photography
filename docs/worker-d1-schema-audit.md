@@ -58,3 +58,10 @@ These are static contract findings, not evidence that Production currently lacks
 - GitHub Actions run #350 completed successfully: typecheck, Worker API regression tests, forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend build all passed.
 - This is fixture-based CI only. The expanded audit SQL has not been run against a verified Production export or a disposable restore of that export. Production compatibility and live Preview flows remain unverified.
 - The audit script is diagnostic: a `PRESENT` column result does not prove type, CHECK, foreign-key, index, or data-mapping compatibility. Follow the disposable-copy acceptance checklist above before any production change.
+
+
+## Follow-up CI verification (2026-10-31)
+
+- GitHub Actions run [#351](https://github.com/pkdiv6548/Photography/actions/runs/41140877461) completed successfully on the current documentation commit. The job passed Worker/frontend typecheck, Worker API regression tests, forward-migration fixture, fresh-schema contract fixture, and frontend production build.
+- Pull request #87 was rechecked: it remains open and Draft, with no submitted reviews or inline review threads returned by GitHub at the time of this check.
+- This follow-up is still fixture/build validation only. It does not resolve the production-schema mismatch or verify Preview secrets, admin login, or real Supabase Storage operations.
