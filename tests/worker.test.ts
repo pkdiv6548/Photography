@@ -855,3 +855,60 @@ test("media upload rejects unsupported MIME types before project or storage writ
   assert.equal(projectQueryAttempted, false);
   assert.equal((await response.json() as { error: string }).error, "unsupported_media_type");
 });
+
+
+test("media upload rejects an upload that would exceed the shared monthly quota before contacting storage", async () => {
+  let storageContacted = false;
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          if (query.includes("SELECT id, status FROM projects")) {
+            return { id: "11111111-1111-4111-8111-111111111111", status: "published" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    },
+    async batch(_statements: unknown[]) {
+      return [
+        { success: true, meta: { changes: 0 } },
+        { success: true, meta: { changes: 0 } }
+      ];
+    }
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])], { type: "image/jpeg" }), "quota-test.jpg");
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+    storageContacted = true;
+    return originalFetch(...args);
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/admin/projects/media/upload", {
+        method: "POST",
+        headers: { Cookie: "__Host-gf_admin=test-session-token" },
+        body: form
+      }),
+      {
+        DB: db,
+        SUPABASE_URL: "https://photography-test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+        SUPABASE_STORAGE_BUCKET: "golden-films-media"
+      } as never
+    );
+    assert.equal(response.status, 413);
+    assert.equal((await response.json() as { error: string }).error, "monthly_upload_quota_exceeded");
+    assert.equal(storageContacted, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
