@@ -16,6 +16,8 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 
 ## Current prerequisite status
 
+- [x] Cloudflare Pages reported a successful Preview deployment for commit `39d32aa` at `https://feat-supabase-storage-free-t.golden-films.pages.dev` (deployment success only; runtime health/readiness and Supabase operations are not yet verified).
+
 - [ ] Set `SUPABASE_SERVICE_ROLE_KEY` as a Cloudflare Pages **server-side Secret** in Preview.
 - [ ] Set a strong Preview-only `ADMIN_SETUP_SECRET` as a server-side Secret.
 - [ ] Confirm Preview has the expected D1 binding and the additive migration `migrations/0099_gf_monthly_media_usage.sql`.
