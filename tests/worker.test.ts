@@ -741,3 +741,40 @@ test("media route fails closed without Supabase config instead of falling back t
   assert.deepEqual(await response.json(), { error: "media_storage_not_configured" });
   assert.equal(r2ReadAttempted, false);
 });
+
+
+test("media upload enforces multipart size cap when Content-Length is omitted", async () => {
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+  const oversizedBody = new Uint8Array(20 * 1024 * 1024 + 64 * 1024 + 1);
+  const request = new Request("https://example.test/api/admin/projects/media/upload", {
+    method: "POST",
+    headers: {
+      "Content-Type": "multipart/form-data; boundary=upload-boundary",
+      Cookie: "__Host-gf_admin=test-session-token"
+    },
+    body: oversizedBody
+  });
+  assert.equal(request.headers.has("content-length"), false);
+  const response = await worker.fetch(request, {
+    DB: db,
+    SUPABASE_URL: "https://photography-test.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+    SUPABASE_STORAGE_BUCKET: "golden-films-media"
+  });
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "file_too_large" });
+});
