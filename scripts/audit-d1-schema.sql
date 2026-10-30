@@ -1,8 +1,9 @@
 -- Read-only contract audit for the current Golden Films Worker API.
 -- Run in the Cloudflare D1 SQL console against the intended database.
--- This compares required column names and the nullable-email contract using
+-- This compares required column names and selected nullable-column contracts using
 -- SQLite schema metadata only. Results: PRESENT, MISSING, INCOMPATIBLE_NOT_NULL.
--- Diagnostic only; it does not validate all constraints or data mappings.
+-- Checks nullable enquiries.email and audit_logs.admin_user_id. Diagnostic only;
+-- it does not validate all constraints or data mappings.
 
 WITH expected(table_name, column_name, must_allow_null) AS (
   SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]')
@@ -19,11 +20,11 @@ WITH expected(table_name, column_name, must_allow_null) AS (
     ["enquiries","status",0],["enquiries","created_at",0],["enquiries","updated_at",0],
     ["enquiry_rate_limits","ip_hash",0],["enquiry_rate_limits","window_start",0],["enquiry_rate_limits","request_count",0],
     ["admin_users","id",0],["admin_users","email",0],["admin_users","password_hash",0],["admin_users","password_salt",0],
-    ["admin_users","role",0],["admin_users","is_active",0],["admin_users","created_at",0],
+    ["admin_users","role",0],["admin_users","is_active",0],["admin_users","created_at",0],["admin_users","last_login_at",0],
     ["admin_sessions","id",0],["admin_sessions","admin_user_id",0],["admin_sessions","token_hash",0],["admin_sessions","expires_at",0],
     ["admin_setup","id",0],["admin_setup","completed_at",0],
     ["auth_rate_limits","rate_key",0],["auth_rate_limits","window_started_at",0],["auth_rate_limits","request_count",0],
-    ["audit_logs","id",0],["audit_logs","admin_user_id",0],["audit_logs","action",0],["audit_logs","target_type",0],["audit_logs","target_id",0],["audit_logs","created_at",0],
+    ["audit_logs","id",0],["audit_logs","admin_user_id",1],["audit_logs","action",0],["audit_logs","target_type",0],["audit_logs","target_id",0],["audit_logs","created_at",0],
     ["site_content","page_slug",0],["site_content","draft_json",0],["site_content","published_json",0],["site_content","status",0],["site_content","updated_at",0],
     ["site_content_revisions","id",0],["site_content_revisions","page_slug",0],["site_content_revisions","content_json",0],["site_content_revisions","revision_status",0],["site_content_revisions","created_at",0]
   ]')
