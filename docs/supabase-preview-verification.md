@@ -18,19 +18,20 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 
 **Configuration and read-only D1 schema audit (Cloudflare API, 2026-10-30):**
 
-- [x] Latest Preview deployment is successful for commit `08bc9e70d246e04f62b134abe41231e78a5b6a55`; deployment URL: `https://394767ee.golden-films.pages.dev` (branch alias: `https://feat-supabase-storage-free-t.golden-films.pages.dev`). This confirms build/deploy only, not API readiness.
+- [x] Latest successful Preview deployment reported by Cloudflare: `https://cec4776b.golden-films.pages.dev`, commit `3b54390f652125bc683dde9966e8c1f0635d1e5f`. Deployment success confirms build/deploy only, not API readiness.
 - [x] Preview D1 binding `DB` is configured to database `golden-films-preview-test` (`21f470cb-776a-4eb2-816e-16605139299a`).
-- [x] Read-only schema inspection confirms Preview has `gf_monthly_media_usage`, `admin_users.role`, `enquiries.consent`, `site_content`, and `site_content_revisions`. The quota migration's table is present in Preview.
-- [x] Preview non-secret variables are configured: `SUPABASE_URL` and `SUPABASE_STORAGE_BUCKET`.
-- [ ] **BLOCKED:** Preview `ADMIN_SETUP_SECRET` exists as a secret entry but its configured value is empty.
-- [ ] **BLOCKED:** Preview `SUPABASE_SERVICE_ROLE_KEY` is absent from the Pages environment configuration.
+- [x] Read-only schema inspection confirms Preview has `gf_monthly_media_usage`, `admin_users.role`, `enquiries.consent`, `site_content`, and `site_content_revisions`.
+- [x] Preview non-secret variables `SUPABASE_URL` and `SUPABASE_STORAGE_BUCKET` are configured.
+- [ ] **BLOCKED:** Preview `ADMIN_SETUP_SECRET` secret entry is present but has no configured value.
+- [ ] **BLOCKED:** Preview `SUPABASE_SERVICE_ROLE_KEY` is absent from Pages environment configuration.
 - [ ] **BLOCKED:** Production project config has no `DB` D1 binding and no `SUPABASE_SERVICE_ROLE_KEY` configured.
-- [ ] **BLOCKED:** Read-only schema inspection of `golden-films-db` (`0241231b-6e6c-410b-a5ac-958eeb424a78`) shows it is behind the Preview schema: it lacks `admin_users.role`, `enquiries.consent`, `site_content`, `site_content_revisions`, `gf_monthly_media_usage`, and the newer `media` table. This is a verified schema mismatch; no Production data or schema was changed.
-- [ ] Set `SUPABASE_SERVICE_ROLE_KEY` as a Cloudflare Pages **server-side Secret** in Preview.
-- [ ] Set a strong Preview-only `ADMIN_SETUP_SECRET` as a server-side Secret.
-- [ ] Apply and verify the reviewed Production schema migration plan only after a Production backup/export and restore validation. Do not run the compatibility SQL blindly.
-- [ ] Configure the correct Production D1 binding and server-side Supabase secret after the Production schema plan is approved.
-- [ ] Redeploy Preview after changing runtime settings, then confirm the deployment completed.
+- [ ] **BLOCKED:** Read-only schema inspection of Production database `golden-films-db` (`0241231b-6e6c-410b-a5ac-958eeb424a78`) shows it lacks `admin_users.role`, `enquiries.consent`, `site_content`, `site_content_revisions`, `gf_monthly_media_usage`, and the newer `media` table. No Production schema or data was changed.
+- [ ] Set `SUPABASE_SERVICE_ROLE_KEY` as a Cloudflare Pages server-side Secret in Preview and set a strong, Preview-only `ADMIN_SETUP_SECRET`.
+- [ ] Validate the Production backup/restore and review the schema migration plan before any Production DB change; do not run the compatibility SQL blindly.
+- [ ] Configure and verify Production D1 binding and server-side Supabase secret only after the schema plan is approved.
+- [ ] Redeploy Preview after secret changes and rerun runtime verification.
+
+**Runtime probe note:** An attempted API probe from the current verification environment was blocked by its outbound-request policy (HTTP 403 message stated requests to the Pages host are not allowed). This is **not** an observed response from the site's API. Treat `/api/health` and `/api/ready` as **Not verified / Blocked**, and run the smoke checks from a normal browser or permitted network.
 
 ## Smoke checks
 
