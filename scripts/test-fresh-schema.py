@@ -145,6 +145,14 @@ def main():
     # Least privilege: omitted role must never promote a new account to owner.
     admin_role = next(row for row in db.execute("PRAGMA table_info(admin_users)") if row["name"] == "role")
     assert admin_role["dflt_value"] == "'editor'", admin_role["dflt_value"]
+    db.execute(
+        "INSERT INTO admin_users (id,email,password_hash,password_salt) "
+        "VALUES ('least-privilege-test','least-privilege@example.test','hash','salt')"
+    )
+    assigned_role = db.execute(
+        "SELECT role FROM admin_users WHERE id='least-privilege-test'"
+    ).fetchone()[0]
+    assert assigned_role == "editor", assigned_role
 
     # Exercise representative CHECK, UNIQUE, and FK constraints, without retaining bad rows.
     expect_integrity_error(
