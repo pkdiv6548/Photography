@@ -16,7 +16,7 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 
 ## Current prerequisite status
 
-**Latest automated verification:** GitHub Actions run `41083836266` (run #338, `Golden Films checks`) completed with conclusion `success` for commit `1f0ac24fa891c85afd6888493058136a0b7e95bf`. This is CI evidence only; it does not confirm live Supabase Storage behavior.
+**Latest confirmed automated verification:** GitHub Actions run `41083836266` (run #338, `Golden Films checks`) completed with conclusion `success` for commit `1f0ac24fa891c85afd6888493058136a0b7e95bf`. Later documentation/migration-test commits have been pushed, but the available workflow/status lookup returned no run for their latest commit at the last check. Do not assume those commits passed CI until a new run is visible. Even a passing CI run does not confirm live Supabase Storage behavior.
 
 **Configuration and read-only D1 schema audit (Cloudflare API, 2026-10-30):**
 
@@ -28,7 +28,7 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 - [ ] **BLOCKED:** Preview `SUPABASE_SERVICE_ROLE_KEY` is absent from Pages environment configuration.
 - [ ] **BLOCKED:** Production project config has no `DB` D1 binding and no `SUPABASE_SERVICE_ROLE_KEY` configured.
 - [ ] **BLOCKED:** Read-only schema inspection of Production database `golden-films-db` (`0241231b-6e6c-410b-a5ac-958eeb424a78`) shows it lacks `admin_users.role`, `enquiries.consent`, `site_content`, `site_content_revisions`, and `gf_monthly_media_usage`. The current Worker upload/read routes use the legacy `project_media` table (columns required by the Worker include `id`, `project_id`, `media_type`, `preview_url`, `original_key`, `alt_en`, `alt_hi`, `sort_order`, and `is_public`); verify those exact columns in Production before any rollout. No Production schema or data was changed.
-- [ ] **Migration review required:** The current draft `docs/production-d1-compatibility.sql` adds the admin role, consent, CMS tables, and quota ledger, but it does **not** verify or repair all columns queried by the Worker. Do not treat that draft alone as a complete Production migration. Prepare a forward-only migration against a verified disposable restore, preserving existing `projects`, `project_media`, `project_translations`, admin accounts, and enquiries; compare every Worker SQL query with the actual Production schema and validate media metadata before rollout.
+- [ ] **Migration review required:** Candidate forward-only SQL is in `docs/forward-migrations/2026-10-29-live-schema-forward.sql`; its SQLite fixture is `scripts/test-forward-migration.py`. The candidate now includes the shared monthly quota ledger and the fixture checks its schema/constraint, but this is not a Production-ready approval. Restore a verified Production export to a disposable database, run this exact migration and all verification scripts there, compare every Worker SQL query against the restored schema (especially `project_media`), and confirm all existing data is preserved before rollout. Do not execute against Production.
 - [ ] Set `SUPABASE_SERVICE_ROLE_KEY` as a Cloudflare Pages server-side Secret in Preview and set a strong, Preview-only `ADMIN_SETUP_SECRET`.
 - [ ] Validate the Production backup/restore and review the schema migration plan before any Production DB change; do not run the compatibility SQL blindly.
 - [ ] Configure and verify Production D1 binding and server-side Supabase secret only after the schema plan is approved.
