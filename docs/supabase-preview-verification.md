@@ -16,6 +16,8 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 
 ## Current prerequisite status
 
+**Latest automated verification:** GitHub Actions run `41080270015` (`Golden Films checks`) completed with conclusion `success` for commit `8eae96ac24e4ba828be34e25aa2c327b565b0cfc`. This is CI evidence only; it does not confirm live Supabase Storage behavior.
+
 **Configuration and read-only D1 schema audit (Cloudflare API, 2026-10-30):**
 
 - [x] Latest successful Preview deployment reported by Cloudflare: `https://cec4776b.golden-films.pages.dev`, commit `3b54390f652125bc683dde9966e8c1f0635d1e5f`. Deployment success confirms build/deploy only, not API readiness.
