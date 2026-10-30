@@ -1,3 +1,17 @@
+## Release gate snapshot — 2026-10-30 (PR #85)
+
+- [x] PR #81 (admin setup/login/dashboard implementation) is merged into `main`; merge status does not prove the live admin flows are verified.
+- [x] PR #83 (static schema-contract migration tests) is merged into `main`; this does not replace executing Worker SQL against fresh and restored legacy schemas.
+- [x] PR #84 (schema reconciliation/release-gate documentation) is merged into `main`.
+- [ ] PR #85 proposes corrections to stale schema-gate documentation; it remains open pending checks/review.
+- [ ] Authenticated browser/API E2E for owner setup, login, session, logout, CMS revision/publish, and authorization boundaries remains unverified.
+- [ ] Production D1 migration rehearsal remains blocked until a verified production export is restored into a disposable D1 and preservation/integrity checks pass. Do not run migrations against production.
+- [ ] Pages API bridge and binding/routing verification remain separate release gates; a successful Pages deployment is not proof the routes work.
+- [x] R2 upload/read/delete E2E is explicitly on hold per project direction; do not enable R2 or make subscription purchases.
+- [x] No production D1 writes/migrations, owner creation, secret/binding changes, or manual production deployment were performed in this continuation.
+
+---
+
 ## Current continuation status — 2026-10-30
 
 - [x] PR #81 merged into `main` as `696319ccfd5487dc1e6c6ea73be7f7d49a68e37a`: https://github.com/pkdiv6548/Photography/pull/81.
