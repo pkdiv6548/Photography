@@ -551,8 +551,13 @@ test("initial admin setup explicitly assigns the owner role", async () => {
 
 test("initial admin setup refuses when no owner row is inserted", async () => {
   const statements: string[] = [];
+  let batchCalled = false;
   const db = {
-    async batch(_statements: unknown[]) { return [{ success: true, meta: { changes: 0 } }, { success: true, meta: { changes: 0 } }, { success: true, meta: { changes: 0 } }]; },
+    async batch(batchStatements: unknown[]) {
+      batchCalled = true;
+      assert.equal(batchStatements.length, 3);
+      return [{ success: true, meta: { changes: 0 } }, { success: true, meta: { changes: 0 } }, { success: true, meta: { changes: 0 } }];
+    },
     prepare(query: string) {
       statements.push(query);
       return {
@@ -587,8 +592,9 @@ test("initial admin setup refuses when no owner row is inserted", async () => {
   );
   assert.equal(response.status, 409);
   assert.deepEqual(await response.json(), { error: "initial_setup_already_completed" });
-  assert.equal(statements.some(query => query.includes("INSERT INTO audit_logs")), false);
-  assert.equal(statements.some(query => query.includes("UPDATE admin_setup")), false);
+  assert.equal(batchCalled, true, "setup writes must use one transactional D1 batch");
+  assert.equal(statements.some(query => query.includes("INSERT INTO audit_logs")), true);
+  assert.equal(statements.some(query => query.includes("UPDATE admin_setup")), true);
 });
 
 
