@@ -59,3 +59,9 @@ These are not just missing-table issues: the baseline schema and current Worker 
 - Test a fresh database from zero using the full migration sequence and the actual Worker.
 - Test an isolated copy of the production schema separately; passing fresh-schema tests alone is insufficient.
 - Verify project/category/media joins and translation fields with representative rows, not only endpoint status codes.
+
+## Least-privilege role migration guard (2026-10-30)
+
+- The forward migration now adds `admin_users.role` with default `editor`, not `owner`. This prevents existing legacy accounts from gaining owner-level permissions merely because the new role column is introduced.
+- The initial-owner setup route explicitly inserts `role='owner'` only when no admin account exists. If a restored production copy contains legacy admins, do not promote any account automatically; review the accounts and use a deliberate, audited owner promotion after migration.
+- The forward-migration fixture asserts both the default and the migrated legacy account role are `editor`. This is a safety improvement, not permission to run the migration against production.
