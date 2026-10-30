@@ -633,3 +633,82 @@ test("readiness endpoint rejects the repository's canonical migration schema unt
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { error: "database_schema_incompatible" });
 });
+
+test("public media route streams private Supabase Storage objects only after publication check", async () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const mediaId = "22222222-2222-4222-8222-222222222222";
+  const key = `projects/${projectId}/${mediaId}.jpg`;
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  let authorization = "";
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    requestedUrl = String(input);
+    authorization = new Headers(init?.headers).get("authorization") ?? "";
+    return new Response("fake-jpeg-bytes", {
+      status: 200,
+      headers: { "content-type": "image/jpeg", etag: '"media-etag"' },
+    });
+  }) as typeof fetch;
+  try {
+    const db = {
+      prepare(query: string) {
+        assert.match(query, /is_public = 1 AND p\.status = 'published'/);
+        return {
+          bind(...args: unknown[]) {
+            assert.equal(args[0], key);
+            return this;
+          },
+          async first<T>() { return { media_type: "image" } as T; },
+        };
+      },
+    };
+    const response = await worker.fetch(new Request(`https://example.test/api/media/${key}`), {
+      DB: db,
+      SUPABASE_URL: "https://photography-test.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+      SUPABASE_STORAGE_BUCKET: "golden-films-media",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/jpeg");
+    assert.equal(response.headers.get("etag"), '"media-etag"');
+    assert.equal(await response.text(), "fake-jpeg-bytes");
+    assert.equal(requestedUrl, `https://photography-test.supabase.co/storage/v1/object/golden-films-media/${key}`);
+    assert.equal(authorization, "Bearer server-only-test-secret");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("public media route does not fetch private storage for unpublished media", async () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const mediaId = "22222222-2222-4222-8222-222222222222";
+  const originalFetch = globalThis.fetch;
+  let storageRequested = false;
+  globalThis.fetch = (async () => {
+    storageRequested = true;
+    return new Response("unexpected", { status: 200 });
+  }) as typeof fetch;
+  try {
+    const db = {
+      prepare(_query: string) {
+        return {
+          bind(..._args: unknown[]) { return this; },
+          async first<T>() { return null as T | null; },
+        };
+      },
+    };
+    const response = await worker.fetch(
+      new Request(`https://example.test/api/media/projects/${projectId}/${mediaId}.jpg`),
+      {
+        DB: db,
+        SUPABASE_URL: "https://photography-test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+        SUPABASE_STORAGE_BUCKET: "golden-films-media",
+      },
+    );
+    assert.equal(response.status, 404);
+    assert.equal(storageRequested, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
