@@ -67,8 +67,8 @@ test("repository migration sequence defines every Worker readiness table and col
 });
 
 test("compatibility migration preserves key relationship and least-privilege guards", () => {
-  assert.match(migrations, /CREATE\\s+UNIQUE\\s+INDEX[^;]*project_translations_project_locale/i);
-  assert.match(migrations, /REFERENCES\\s+projects\\s*\\(id\\)\\s+ON\\s+DELETE\\s+CASCADE/i);
-  assert.match(migrations, /role\\s+TEXT\\s+NOT\\s+NULL\\s+DEFAULT\\s+['"]editor['"]/i);
-  assert.doesNotMatch(migrations, /UPDATE\\s+enquiries\\s+SET\\s+consent\\s*=\\s*1\\b/i);
+  assert.match(migrations, /CREATE\s+UNIQUE\s+INDEX[^;]*project_translations_project_locale/i);
+  assert.match(migrations, /REFERENCES\s+projects\s*\(id\)\s+ON\s+DELETE\s+CASCADE/i);
+  assert.match(migrations, /role\s+TEXT\s+NOT\s+NULL\s+DEFAULT\s+['"]editor['"]/i);
+  assert.doesNotMatch(migrations, /UPDATE\s+enquiries\s+SET\s+consent\s*=\s*1\b/i);
 });
