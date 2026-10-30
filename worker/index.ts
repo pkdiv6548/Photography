@@ -13,6 +13,7 @@ interface D1Statement {
 
 interface D1Binding {
   prepare(query: string): D1Statement;
+  batch<T = unknown>(statements: D1Statement[]): Promise<D1Result<T>[]>;
 }
 
 interface StaticAssetsBinding {
@@ -277,16 +278,28 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
     const id = crypto.randomUUID();
     const salt = crypto.getRandomValues(new Uint8Array(16));
     try {
-      const result = await env.DB.prepare(
-        "INSERT INTO admin_users (id, email, password_hash, password_salt, role, is_active) " +
-        "SELECT ?, ?, ?, ?, 'owner', 1 WHERE NOT EXISTS (SELECT 1 FROM admin_users) " +
-        "AND EXISTS (SELECT 1 FROM admin_setup WHERE id = 1 AND completed_at IS NULL)"
-      ).bind(id, email, await deriveAdminPassword(password, salt), toBase64Url(salt)).run();
-      if ((result.meta?.changes ?? 0) !== 1) return json({ error: "initial_setup_already_completed" }, 409);
-      await env.DB.prepare("UPDATE admin_setup SET completed_at = datetime('now') WHERE id = 1 AND completed_at IS NULL").run();
-      await env.DB.prepare(
-        "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, 'initial_setup', 'admin', ?)"
-      ).bind(crypto.randomUUID(), id, id).run();
+      // D1 batch executes the statements transactionally. Each follow-up statement
+      // is conditional on the owner insert, so a repeated setup cannot mark setup
+      // complete or emit an audit row without creating the initial owner.
+      const statements = [
+        env.DB.prepare(
+          "INSERT INTO admin_users (id, email, password_hash, password_salt, role, is_active) " +
+          "SELECT ?, ?, ?, ?, 'owner', 1 WHERE NOT EXISTS (SELECT 1 FROM admin_users) " +
+          "AND EXISTS (SELECT 1 FROM admin_setup WHERE id = 1 AND completed_at IS NULL)"
+        ).bind(id, email, await deriveAdminPassword(password, salt), toBase64Url(salt)),
+        env.DB.prepare(
+          "UPDATE admin_setup SET completed_at = datetime('now') " +
+          "WHERE id = 1 AND completed_at IS NULL AND EXISTS (SELECT 1 FROM admin_users WHERE id = ?)"
+        ).bind(id),
+        env.DB.prepare(
+          "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) " +
+          "SELECT ?, ?, 'initial_setup', 'admin', ? WHERE EXISTS (SELECT 1 FROM admin_users WHERE id = ?)"
+        ).bind(crypto.randomUUID(), id, id, id),
+      ];
+      const results = await env.DB.batch(statements);
+      if ((results[0]?.meta?.changes ?? 0) !== 1) {
+        return json({ error: "initial_setup_already_completed" }, 409);
+      }
       return json({ ok: true, message: "Initial owner created. Sign in to continue." }, 201);
     } catch {
       return json({ error: "admin_setup_unavailable" }, 503);
