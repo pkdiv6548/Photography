@@ -39,3 +39,22 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 - Any `/api/ready` 503, schema mismatch, unexplained 5xx, public access to draft media, quota overrun, or missing D1 binding: stop and fix Preview before continuing.
 - Do not run the production compatibility SQL or alter Production D1 as part of this runbook.
 - Do not merge PR #87 or claim launch readiness until the Preview checks pass and the Production backup/schema/binding plan has been independently verified.
+
+## Verification results log template
+
+Copy this table into the PR comment or a separate test report when running the checklist. Record only outcomes and non-sensitive metadata; **never record secrets, cookies, session tokens, or private media URLs**.
+
+| Check | Environment / commit | Expected result | Actual status / result | Pass / fail / blocked | Notes |
+|---|---|---|---|---|---|
+| `GET /api/health` | Preview / `<commit SHA>` | HTTP 200, service status `ok` | Not run | Blocked | |
+| `GET /api/ready` | Preview / `<commit SHA>` | HTTP 200 when dependencies/schema are ready | Not run | Blocked | |
+| Admin login and protected-route denial | Preview test admin | Login succeeds; unauthenticated protected request denied | Not run | Blocked | |
+| JPEG upload and media read | Preview test project | Upload succeeds; media served only through app route | Not run | Blocked | |
+| MP4/WebM upload and read | Preview test project | Valid video under 20 MiB succeeds | Not run | Blocked | |
+| Unsupported type / over 20 MiB | Preview | Request rejected; quota unchanged | Not run | Blocked | |
+| Shared 100 MiB monthly quota | Disposable/test environment | Over-limit upload rejected across admins | Not run | Blocked | |
+| Delete and unpublished-media access | Preview test assets | Deleted asset no longer served; draft asset inaccessible publicly | Not run | Blocked | |
+| Enquiry validation and persistence | Preview | Valid test enquiry persists; invalid input rejected | Not run | Blocked | |
+| Mobile and page-by-page regression | Preview | Layout/navigation/content behave as intended | Not run | Blocked | |
+
+Use **Blocked** rather than **Pass** when a prerequisite such as secrets, D1 binding, migration, or deployment is not ready. Attach sanitized logs or screenshots where useful. Do not include production customer data in test evidence.
