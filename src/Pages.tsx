@@ -128,6 +128,7 @@ function AdminContentRevisionHistory({ page, onRestored }: {
   const [revisions, setRevisions] = useState<ContentRevision[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
+  const [message, setMessage] = useState("");
 
   const loadRevisions = async () => {
     setLoading(true);
@@ -495,7 +496,6 @@ function ShowreelContentPage() {
 function ContactContentPage() {
   const content = usePublishedPageContent("contact");
   const [service, setService] = useState(new URLSearchParams(window.location.search).get("service") || "");
-  const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState("");
   const submit = async (event: FormEvent<HTMLFormElement>) => {
