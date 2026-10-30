@@ -41,8 +41,6 @@ interface Env {
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_STORAGE_BUCKET?: string;
-  // Legacy R2 fallback is retained only during migration.
-  MEDIA_BUCKET?: R2BucketBinding;
   ADMIN_SETUP_SECRET?: string;
 }
 
@@ -70,52 +68,31 @@ function supabaseStorageHeaders(env: Env, contentType?: string): Headers {
 }
 
 async function putMediaObject(env: Env, key: string, body: ReadableStream<Uint8Array>, contentType: string): Promise<void> {
-  if (isSupabaseStorageConfigured(env)) {
-    const headers = supabaseStorageHeaders(env, contentType);
-    headers.set("x-upsert", "false");
-    headers.set("cache-control", "max-age=31536000");
-    const response = await fetch(supabaseObjectUrl(env, key), { method: "POST", headers, body });
-    if (!response.ok) throw new Error(`supabase_storage_upload_failed_${response.status}`);
-    return;
-  }
-  if (env.MEDIA_BUCKET) {
-    await env.MEDIA_BUCKET.put(key, body, { httpMetadata: { contentType } });
-    return;
-  }
-  throw new Error("media_storage_not_configured");
+  if (!isSupabaseStorageConfigured(env)) throw new Error("media_storage_not_configured");
+  const headers = supabaseStorageHeaders(env, contentType);
+  headers.set("x-upsert", "false");
+  headers.set("cache-control", "max-age=31536000");
+  const response = await fetch(supabaseObjectUrl(env, key), { method: "POST", headers, body });
+  if (!response.ok) throw new Error(`supabase_storage_upload_failed_${response.status}`);
 }
 
 async function getMediaObject(env: Env, key: string): Promise<Response | null> {
-  if (isSupabaseStorageConfigured(env)) {
-    const response = await fetch(supabaseObjectUrl(env, key), { method: "GET", headers: supabaseStorageHeaders(env) });
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`supabase_storage_download_failed_${response.status}`);
-    return response;
-  }
-  if (env.MEDIA_BUCKET) {
-    const object = await env.MEDIA_BUCKET.get(key);
-    if (!object) return null;
-    return new Response(object.body, { headers: {
-      "content-type": object.httpMetadata?.contentType || "application/octet-stream",
-      ...(object.httpEtag ? { etag: object.httpEtag } : {}),
-    } });
-  }
-  throw new Error("media_storage_not_configured");
+  if (!isSupabaseStorageConfigured(env)) throw new Error("media_storage_not_configured");
+  const response = await fetch(supabaseObjectUrl(env, key), { method: "GET", headers: supabaseStorageHeaders(env) });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`supabase_storage_download_failed_${response.status}`);
+  return response;
 }
 
 async function deleteMediaObject(env: Env, key: string): Promise<void> {
-  if (isSupabaseStorageConfigured(env)) {
-    const url = `${env.SUPABASE_URL!.replace(/\/$/, "")}/storage/v1/object/${encodeURIComponent(env.SUPABASE_STORAGE_BUCKET!)}`;
-    const response = await fetch(url, {
-      method: "DELETE",
-      headers: supabaseStorageHeaders(env, "application/json"),
-      body: JSON.stringify({ prefixes: [key] }),
-    });
-    if (!response.ok && response.status !== 404) throw new Error(`supabase_storage_delete_failed_${response.status}`);
-    return;
-  }
-  if (env.MEDIA_BUCKET) { await env.MEDIA_BUCKET.delete(key); return; }
-  throw new Error("media_storage_not_configured");
+  if (!isSupabaseStorageConfigured(env)) throw new Error("media_storage_not_configured");
+  const url = `${env.SUPABASE_URL!.replace(/\/$/, "")}/storage/v1/object/${encodeURIComponent(env.SUPABASE_STORAGE_BUCKET!)}`;
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: supabaseStorageHeaders(env, "application/json"),
+    body: JSON.stringify({ prefixes: [key] }),
+  });
+  if (!response.ok && response.status !== 404) throw new Error(`supabase_storage_delete_failed_${response.status}`);
 }
 
 async function reserveMonthlyMediaBytes(db: D1Binding, bytes: number): Promise<{ reserved: boolean; monthKey: string }> {
@@ -738,7 +715,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
 
   if (url.pathname.startsWith("/api/media/") && request.method === "GET") {
-    if (!env.DB || (!isSupabaseStorageConfigured(env) && !env.MEDIA_BUCKET)) return json({ error: "media_storage_not_configured" }, 503);
+    if (!env.DB || !isSupabaseStorageConfigured(env)) return json({ error: "media_storage_not_configured" }, 503);
     let key = "";
     try { key = decodeURIComponent(url.pathname.slice("/api/media/".length)); } catch { return json({ error: "media_not_found" }, 404); }
     if (!/^projects\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:jpg|jpeg|png|webp|gif|mp4|webm)$/i.test(key)) return json({ error: "media_not_found" }, 404);
@@ -1111,7 +1088,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     const admin = await currentAdmin(request, env);
     if (!admin) return json({ error: "unauthorized" }, 401);
-    if (!isSupabaseStorageConfigured(env) && !env.MEDIA_BUCKET) return json({ error: "media_storage_not_configured" }, 503);
+    if (!isSupabaseStorageConfigured(env)) return json({ error: "media_storage_not_configured" }, 503);
     const declaredLength = Number(request.headers.get("content-length") ?? "0");
     if (declaredLength > SUPABASE_MEDIA_MAX_FILE_BYTES + 64 * 1024) return json({ error: "file_too_large" }, 413);
     let form: FormData;
@@ -1367,14 +1344,14 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         enquirySchemaReady,
         portfolioSchemaReady,
         contentTablesReady,
-        mediaStorageConfigured: isSupabaseStorageConfigured(env) || Boolean(env.MEDIA_BUCKET),
+        mediaStorageConfigured: isSupabaseStorageConfigured(env),
         blockers: [
           ...(!env.ADMIN_SETUP_SECRET ? ["ADMIN_SETUP_SECRET is not configured"] : []),
           ...(!adminRoleSchemaReady ? ["Owner/editor role migration is pending"] : []),
           ...(!enquirySchemaReady ? ["Enquiry consent/schema migration is pending"] : []),
           ...(!portfolioSchemaReady ? ["Portfolio schema is incompatible"] : []),
           ...(!contentTablesReady ? ["CMS content tables are missing"] : []),
-          ...(!isSupabaseStorageConfigured(env) && !env.MEDIA_BUCKET ? ["Supabase Storage secrets (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET) are not configured"] : []),
+          ...(!isSupabaseStorageConfigured(env) ? ["Supabase Storage secrets (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET) are not configured"] : []),
         ],
       });
     } catch {
