@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate fresh migrations and the Worker-facing schema bridge with SQLite."""
+"""Validate fresh migrations, Worker schema bridge, indexes, constraints, and relationships."""
 from pathlib import Path
 import sqlite3
 
@@ -22,6 +22,31 @@ REQUIRED_COLUMNS = {
     "site_content": {"page_slug", "draft_json", "published_json", "status", "updated_at"},
     "site_content_revisions": {"id", "page_slug", "content_json", "revision_status", "created_at"},
 }
+
+REQUIRED_INDEXES = {
+    "idx_admin_sessions_expiry",
+    "idx_audit_logs_created_at",
+    "idx_enquiries_status_created",
+    "idx_enquiry_rate_limits_window",
+    "idx_media_project_order",
+    "idx_project_media_project_order",
+    "idx_project_translations_project_locale",
+    "idx_projects_category_status",
+    "idx_projects_public_order",
+    "idx_site_content_revisions_page_created",
+}
+
+def expect_integrity_error(db, sql, message):
+    db.execute("SAVEPOINT expected_constraint_failure")
+    try:
+        db.execute(sql)
+    except sqlite3.IntegrityError:
+        db.execute("ROLLBACK TO expected_constraint_failure")
+        db.execute("RELEASE expected_constraint_failure")
+        return
+    db.execute("ROLLBACK TO expected_constraint_failure")
+    db.execute("RELEASE expected_constraint_failure")
+    raise AssertionError(message)
 
 def main():
     if not MIGRATIONS or not BRIDGE.exists():
@@ -57,6 +82,32 @@ def main():
         if missing:
             raise AssertionError(f"{table} missing Worker-required columns: {sorted(missing)}")
 
+    indexes = {row["name"] for row in db.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'"
+    )}
+    missing_indexes = REQUIRED_INDEXES - indexes
+    if missing_indexes:
+        raise AssertionError(f"Missing required indexes: {sorted(missing_indexes)}")
+
+    # Confirm critical referential links exist in the schema.
+    expected_foreign_keys = {
+        ("projects", "category_id", "categories", "id"),
+        ("project_translations", "project_id", "projects", "id"),
+        ("media", "project_id", "projects", "id"),
+        ("project_media", "project_id", "projects", "id"),
+        ("admin_sessions", "admin_user_id", "admin_users", "id"),
+        ("audit_logs", "admin_user_id", "admin_users", "id"),
+        ("site_content", "updated_by", "admin_users", "id"),
+        ("site_content_revisions", "changed_by", "admin_users", "id"),
+    }
+    actual_foreign_keys = set()
+    for table in REQUIRED_COLUMNS:
+        for fk in db.execute(f"PRAGMA foreign_key_list({table})"):
+            actual_foreign_keys.add((table, fk["from"], fk["table"], fk["to"]))
+    missing_foreign_keys = expected_foreign_keys - actual_foreign_keys
+    if missing_foreign_keys:
+        raise AssertionError(f"Missing required foreign keys: {sorted(missing_foreign_keys)}")
+
     category = db.execute(
         "SELECT title_en, title_hi FROM categories WHERE slug='wedding-photography'"
     ).fetchone()
@@ -91,7 +142,43 @@ def main():
     assert media["original_key"] == "projects/test/photo.jpg" and media["is_public"] == 1, media
     assert media["alt_en"] == "English alt" and media["alt_hi"] == "हिंदी alt", media
 
-    print(f"PASS: {len(MIGRATIONS)} migrations discovered; fresh baseline plus 0006 bridge verified.")
+    # Exercise representative CHECK, UNIQUE, and FK constraints, without retaining bad rows.
+    expect_integrity_error(
+        db,
+        "INSERT INTO admin_users (id,email,password_hash,password_salt,role) VALUES ('bad-role','bad@example.test','hash','salt','superadmin')",
+        "admin_users.role CHECK constraint did not reject an unsupported role",
+    )
+    expect_integrity_error(
+        db,
+        "INSERT INTO project_media (id,project_id,media_type,preview_url) VALUES ('bad-media','project-test','document','/bad')",
+        "project_media.media_type CHECK constraint did not reject an unsupported media type",
+    )
+    expect_integrity_error(
+        db,
+        "INSERT INTO project_media (id,project_id,media_type,preview_url) VALUES ('orphan-media','missing-project','image','/bad')",
+        "project_media foreign key did not reject a missing project",
+    )
+    expect_integrity_error(
+        db,
+        "INSERT INTO site_content (page_slug) VALUES ('not-a-page')",
+        "site_content.page_slug CHECK constraint did not reject an unsupported page",
+    )
+
+    fk_violations = list(db.execute("PRAGMA foreign_key_check"))
+    if fk_violations:
+        raise AssertionError(f"Foreign-key violations after migration: {[tuple(row) for row in fk_violations]}")
+
+    # Compatibility migration should preserve source rows and create exactly one bridged media row.
+    assert db.execute("SELECT COUNT(*) FROM projects WHERE id='project-test'").fetchone()[0] == 1
+    assert db.execute("SELECT COUNT(*) FROM project_translations WHERE project_id='project-test'").fetchone()[0] == 2
+    assert db.execute("SELECT COUNT(*) FROM media WHERE id='media-test'").fetchone()[0] == 1
+    assert db.execute("SELECT COUNT(*) FROM project_media WHERE id='media-test'").fetchone()[0] == 1
+
+    print(
+        f"PASS: {len(MIGRATIONS)} migrations discovered; fresh schema, "
+        f"{len(REQUIRED_INDEXES)} indexes, {len(expected_foreign_keys)} foreign keys, "
+        "constraints, representative data migration, and referential integrity verified."
+    )
 
 if __name__ == "__main__":
     main()
