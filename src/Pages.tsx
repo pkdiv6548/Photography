@@ -441,40 +441,95 @@ function usePublishedPageContent(page: EditablePage) {
 
 function AboutContentPage() {
   const content = usePublishedPageContent("about");
+  const values = [
+    ["01", "Story before spectacle", "We start with the feeling, people and purpose behind each brief—not just a shot list."],
+    ["02", "A considered process", "Planning, capture, selection and finishing are treated as one connected creative process."],
+    ["03", "Honest presentation", "Portfolio placeholders are clearly labelled. Client stories and credentials are only added after approval."]
+  ];
   return <SiteFrame eyebrow="THE CREATIVE BEHIND THE LENS" title={content.titleEn || "About Golden Films"}>
-    <p className="section-subtitle">{content.textEn || "Golden Films is a photography, videography, photo-editing and video-editing portfolio. The owner's approved biography and real project stories will be added when supplied."}</p>
+    <p className="section-subtitle">{content.textEn || "Golden Films brings photography, videography, photo editing and video editing together in one creative portfolio. The focus is on preserving meaningful moments and helping people and brands communicate visually."}</p>
     <div className="categories-footnote"><Image size={16}/> Portfolio visuals currently contain sample/demo images, not verified client work.</div>
+    <section className="page-section"><p className="eyebrow"><span/> OUR POINT OF VIEW</p><h2>Good visuals do more than look beautiful.</h2><p className="section-subtitle">They help people remember a moment, understand a product and feel connected to a story.</p><div className="services-grid">{values.map(([n,t,d])=><article className="service-card" key={n}><span className="service-icon large">{n}</span><h3>{t}</h3><p>{d}</p></article>)}</div></section>
+    <section className="page-section"><p className="eyebrow"><span/> WHAT WE BRING TOGETHER</p><h2>One visual story, from capture to finish.</h2><div className="services-grid">{[{i:"01",t:"Photography",d:"Still images for people, celebrations, products and brands."},{i:"02",t:"Videography",d:"Moving images shaped around atmosphere, action and story."},{i:"03",t:"Photo editing",d:"Careful retouching and consistent colour treatment."},{i:"04",t:"Video editing",d:"Pacing, sound, colour and formats suited to the intended audience."}].map(x=><article className="service-card" key={x.i}><p className="eyebrow">{x.i}</p><h3>{x.t}</h3><p>{x.d}</p></article>)}</div></section>
+    <section className="page-section"><p className="eyebrow"><span/> HOW WE WORK</p><h2>A clear path from brief to delivery.</h2><div className="services-grid">{["Listen to your goals","Plan the coverage","Create and capture","Edit and review","Deliver approved files"].map((t,i)=><article className="service-card" key={t}><span className="service-icon large">{String(i+1).padStart(2,"0")}</span><h3>{t}</h3><p>{["Understand the occasion, audience and priorities.","Agree the schedule, style and deliverables.","Work to the agreed brief and shot priorities.","Refine the selected work with focused feedback.","Prepare final files for the agreed use." ][i]}</p></article>)}</div></section>
+    <section className="page-section"><p className="eyebrow"><span/> OUR COMMITMENT</p><h2>Clarity matters at every step.</h2><p className="section-subtitle">Scope, timing, delivery format and revisions should be agreed before work begins. Any published project story or client identity will be used only with permission.</p></section>
+    <section className="page-section"><p className="eyebrow"><span/> PORTFOLIO TRANSPARENCY</p><h2>Demo visuals are labelled honestly.</h2><p className="section-subtitle">The current website uses sample imagery to demonstrate the layout. It does not represent verified client work, awards or customer testimonials. Approved work can replace these samples when supplied.</p><a className="text-link" href="/portfolio">Explore portfolio categories <ArrowRight size={15}/></a></section>
+    <section className="page-section"><p className="eyebrow"><span/> START A CONVERSATION</p><h2>Tell us what you want to create.</h2><p className="section-subtitle">Share the occasion, intended use, dates and the feeling you want the final work to convey.</p><a className="button button-gold" href="/contact">Discuss a project <ArrowRight size={15}/></a></section>
   </SiteFrame>;
 }
 
 function ServicesContentPage() {
   const content = usePublishedPageContent("services");
+  const offers = [
+    { Icon: Camera, title: "Photography", description: "Weddings, pre-weddings, portraits, events, fashion and products.", details: ["Story-led coverage and shot planning","Portraits, details and candid moments","Edited high-resolution image selection"], fit:"People, celebrations, products and brands" },
+    { Icon: Film, title: "Videography", description: "Cinematic wedding films, events and brand stories.", details: ["Coverage plan and key moments","Story-focused footage capture","Edit-ready organised media"], fit:"Events, celebrations and promotional stories" },
+    { Icon: WandSparkles, title: "Photo editing", description: "Retouching, colour correction and creative finishing.", details: ["Exposure and colour consistency","Careful portrait retouching","Export sizes matched to usage"], fit:"Photographers, creators and businesses" },
+    { Icon: Clapperboard, title: "Video editing", description: "Cinematic cuts, colour grading, reels and short-form edits.", details: ["Story assembly and pacing","Colour and audio refinement","Social, web and presentation exports"], fit:"Creators, events and brand communications" }
+  ];
   return <SiteFrame eyebrow="WHAT WE CREATE" title={content.titleEn || "Creative Services"}>
-    <p className="section-subtitle">{content.introEn || "Photography, filmmaking and editing for meaningful moments and brands."}</p>
-    <div className="services-grid">{[
-      { Icon: Camera, title: "Photography", description: "Weddings, pre-weddings, portraits, events, fashion and products." },
-      { Icon: Film, title: "Videography", description: "Cinematic wedding films, events, brand stories." },
-      { Icon: WandSparkles, title: "Photo editing", description: "Retouching, colour correction and creative finishing." },
-      { Icon: Clapperboard, title: "Video editing", description: "Cinematic cuts, colour grading, reels and short-form edits." }
-    ].map(({ Icon, title, description }) => <article className="service-card" key={title}><span className="service-icon large"><Icon size={25} /></span><h2>{title}</h2><p>{description}</p><a className="text-link" href="/contact">Ask about this service <ArrowRight size={15}/></a></article>)}</div>
+    <p className="section-subtitle">{content.introEn || "Photography, filmmaking and editing for meaningful moments and brands. Explore the scope, process and deliverables for each service."}</p>
+    <section className="page-section"><p className="eyebrow"><span/> SERVICE MENU</p><h2>Choose the kind of story you need.</h2><div className="services-grid">{offers.map(({Icon,title,description,details,fit})=><article className="service-card" key={title}><span className="service-icon large"><Icon size={25}/></span><h2>{title}</h2><p>{description}</p><p><strong>Best for:</strong> {fit}</p><ul>{details.map(d=><li key={d}>{d}</li>)}</ul><a className="text-link" href={"/contact?service="+encodeURIComponent(title)}>Ask about this service <ArrowRight size={15}/></a></article>)}</div></section>
+    <section className="page-section"><p className="eyebrow"><span/> OUR PROCESS</p><h2>Simple, collaborative and clear.</h2><div className="services-grid">{[["01","Discover","We discuss your goals, date, audience and style."],["02","Plan","We align the brief, schedule, coverage and outputs."],["03","Create","The work is captured or edited against the agreed scope."],["04","Review","You review the agreed selection and share consolidated feedback."],["05","Deliver","Final files are prepared for the agreed channels and use."]].map(([n,t,d])=><article className="service-card" key={n}><p className="eyebrow">{n}</p><h3>{t}</h3><p>{d}</p></article>)}</div></section>
+    <section className="page-section"><p className="eyebrow"><span/> DELIVERABLES</p><h2>Know what you are commissioning.</h2><div className="services-grid">{[["Edited image gallery","Selected images delivered in agreed dimensions and formats."],["Film or highlight edit","A narrative edit shaped around the brief and available footage."],["Social cut-downs","Vertical and short-form versions when included in scope."],["Retouching and finishing","Consistent colour, cleanup and export quality." ]].map(([t,d])=><article className="service-card" key={t}><h3>{t}</h3><p>{d}</p></article>)}</div><p className="section-subtitle">Exact quantities, turnaround, usage rights and revision rounds are confirmed in the project quote before work begins.</p></section>
+    <section className="page-section"><p className="eyebrow"><span/> PREPARING YOUR BRIEF</p><h2>Details that help us plan well.</h2><div className="categories-footnote">Share the date and location, event schedule, reference images, intended audience, delivery deadline, preferred formats and approximate budget. For editing-only work, explain what source files are available and the intended final platform.</div></section>
+    <section className="page-section"><p className="eyebrow"><span/> QUALITY CHECKS</p><h2>Finishing is part of the craft.</h2><p className="section-subtitle">Before delivery, work should be checked for focus, exposure, colour consistency, audio clarity, spelling in graphics, export settings and suitability for the intended platform.</p></section>
+    <section className="page-section"><p className="eyebrow"><span/> COMMON QUESTIONS</p><div className="services-grid">{[["How much does a project cost?","Pricing depends on scope, hours, location, deliverables and editing requirements; request a quote for your brief."],["Can I request a particular style?","Yes—share reference images or links so expectations can be discussed before production."],["Are all images on this site client projects?","No. Sample visuals are marked as demo until verified work is supplied and approved."],["Can you edit footage I already have?","Editing-only requests can be discussed with details about file volume, format and desired output."]].map(([q,a])=><article className="service-card" key={q}><h3>{q}</h3><p>{a}</p></article>)}</div></section>
+    <section className="page-section"><p className="eyebrow"><span/> READY WHEN YOU ARE</p><h2>Let's plan your project.</h2><p className="section-subtitle">Send the basics and we can clarify the right service, schedule and deliverables.</p><a className="button button-gold" href="/contact">Start an enquiry <ArrowRight size={15}/></a></section>
   </SiteFrame>;
 }
 
 function ShowreelContentPage() {
   const content = usePublishedPageContent("showreel");
+  const chapters = [["01","The atmosphere","Establishing shots, spaces, light and the feeling of a place."],["02","The people","Expressions, interactions and the small moments between poses."],["03","The details","Textures, objects, styling and carefully observed details."],["04","The movement","Action, transitions and sequences that carry a story."],["05","The finish","Pacing, colour, sound and a final export suited to its audience."]];
   return <SiteFrame eyebrow="A MOVING PICTURE" title={content.titleEn || "Showreel"}>
-    <p className="section-subtitle">{content.textEn || "Approved video links can be added here. No real showreel video has been supplied yet."}</p>
-    {content.videoUrl
-      ? <p style={{ marginTop: 24 }}><a className="button button-gold" href={content.videoUrl} target="_blank" rel="noopener noreferrer">Watch approved showreel <ArrowRight size={15}/></a></p>
-      : <div className="categories-footnote"><Film size={18}/> Showreel video: awaiting owner-provided or approved video URL.</div>}
+    <p className="section-subtitle">{content.textEn || "A showreel brings stills, motion and editing together. This page is structured for an approved film link; no owner-provided showreel has been supplied yet."}</p>
+    <section className="page-section"><p className="eyebrow"><span/> FEATURED FILM</p><h2>A place for the approved showreel.</h2>{content.videoUrl ? <div className="service-card"><p>Watch the published showreel using the approved external video link.</p><a className="button button-gold" href={content.videoUrl} target="_blank" rel="noopener noreferrer">Watch showreel <ArrowRight size={15}/></a></div> : <div className="categories-footnote"><Film size={18}/> Video pending: the owner must provide an approved YouTube/Vimeo URL. No fabricated video is embedded.</div>}</section>
+    <section className="page-section"><p className="eyebrow"><span/> WHAT A REEL CAN SHOW</p><h2>Five chapters, one visual language.</h2><div className="services-grid">{chapters.map(([n,t,d])=><article className="service-card" key={n}><p className="eyebrow">{n}</p><h3>{t}</h3><p>{d}</p></article>)}</div></section>
+    <section className="page-section"><p className="eyebrow"><span/> STILL PHOTOGRAPHY</p><h2>Frames worth pausing for.</h2><div className="category-grid">{categories.filter(c=>c.group==="photography").slice(0,6).map(c=><article className="category-card" key={c.id}><a className="category-image" href="/portfolio"><img src={c.image} alt={c.imageAlt.en} loading="lazy"/><span className="demo-tag">DEMO</span></a><div className="category-card-copy"><h3>{c.title.en}</h3><p>Sample visual · not verified client work</p></div></article>)}</div></section>
+    <section className="page-section"><p className="eyebrow"><span/> MOTION & EDITING</p><h2>From footage to finished film.</h2><div className="services-grid">{[["Cinematic films","A narrative flow shaped around people and place."],["Event highlights","A concise recap of key moments and atmosphere."],["Brand stories","Visual communication built around a product, service or team."],["Short-form edits","Vertical versions for social platforms when requested."]].map(([t,d])=><article className="service-card" key={t}><h3>{t}</h3><p>{d}</p></article>)}</div></section>
+    <section className="page-section"><p className="eyebrow"><span/> EDITING NOTES</p><h2>Finishing choices shape the feeling.</h2><p className="section-subtitle">Rhythm, colour, transitions, audio levels, titles and aspect ratio should support the story rather than distract from it.</p></section>
+    <section className="page-section"><p className="eyebrow"><span/> TRANSPARENCY</p><h2>Real work will be labelled accurately.</h2><p className="section-subtitle">Current images are demonstration assets. They are not represented as actual client projects, testimonials or awards. The showreel slot remains empty until an approved video is provided.</p></section>
+    <section className="page-section"><p className="eyebrow"><span/> SHARE YOUR BRIEF</p><h2>Have a film in mind?</h2><p className="section-subtitle">Tell us what the film should communicate, where it will be shown and when you need it.</p><a className="button button-gold" href="/contact">Discuss a film <ArrowRight size={15}/></a></section>
   </SiteFrame>;
 }
 
 function ContactContentPage() {
   const content = usePublishedPageContent("contact");
+  const [service, setService] = useState(new URLSearchParams(window.location.search).get("service") || "");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState("");
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); if (sending) return;
+    const form = event.currentTarget; const data = new FormData(form);
+    const payload = { name:String(data.get("name")||"").trim(), email:String(data.get("email")||"").trim(), phone:String(data.get("phone")||"").trim(), service, message:String(data.get("message")||"").trim(), consent:data.get("consent")==="on" };
+    if (!payload.email && !payload.phone) { setResult("Please provide an email address or phone number."); return; }
+    setSending(true); setResult("");
+    try {
+      const response = await fetch("/api/enquiries", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
+      const body = await response.json().catch(()=>({}));
+      if (!response.ok) throw new Error(body.error || "submit_failed");
+      form.reset(); setService(""); setResult("Thank you—your enquiry was submitted.");
+    } catch { setResult("The enquiry could not be submitted. Please try again later; no success has been assumed."); }
+    finally { setSending(false); }
+  };
   return <SiteFrame eyebrow="LET'S MAKE SOMETHING MEANINGFUL" title={content.titleEn || "Contact & Project Enquiry"}>
-    <p className="section-subtitle">{content.textEn || "The enquiry form currently lives on the home page. Phone, WhatsApp, email and Instagram contact details have not yet been provided."}</p>
-    <a className="button button-gold" href="/#contact">Open enquiry form <ArrowRight size={16}/></a>
+    <p className="section-subtitle">{content.textEn || "Tell us what you are planning, the service you need and how we can reach you. Contact details such as phone, WhatsApp and social links will be added when verified."}</p>
+    <section className="page-section"><p className="eyebrow"><span/> PROJECT ENQUIRY</p><h2>Tell us the essentials.</h2><form className="enquiry-form service-card" onSubmit={submit}>
+      <label>Name<input name="name" required maxLength={120} autoComplete="name"/></label>
+      <label>Email<input name="email" type="email" maxLength={254} autoComplete="email"/></label>
+      <label>Phone / WhatsApp<input name="phone" type="tel" maxLength={40} autoComplete="tel"/></label>
+      <label>Service<select value={service} onChange={e=>setService(e.target.value)} required><option value="">Choose a service</option>{["Photography","Videography","Photo editing","Video editing","Other"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
+      <label>Project details<textarea name="message" required minLength={10} maxLength={3000} rows={6} placeholder="Date, location, project goals, deliverables and budget range…"/></label>
+      <label className="consent-row"><input type="checkbox" name="consent" required/> I agree that Golden Films may use these details to respond to my enquiry.</label>
+      <button className="button button-gold" type="submit" disabled={sending}>{sending?"Sending enquiry…":"Send enquiry"} <ArrowRight size={15}/></button>
+      {result&&<p className="form-notice" role="status">{result}</p>}
+    </form></section>
+    <section className="page-section"><p className="eyebrow"><span/> WHAT HAPPENS NEXT</p><div className="services-grid">{[["01","We review the brief","We use your details only to understand and respond to the request."],["02","We clarify the scope","Date, location, deliverables and schedule can be confirmed before any commitment."],["03","We agree the next step","Availability, quote and delivery expectations need confirmation before booking."]].map(([n,t,d])=><article className="service-card" key={n}><p className="eyebrow">{n}</p><h3>{t}</h3><p>{d}</p></article>)}</div></section>
+    <section className="page-section"><p className="eyebrow"><span/> BEFORE YOU SEND</p><h2>Helpful details to include.</h2><p className="section-subtitle">Include your event date, venue or location, approximate hours, desired style, deadline, usage (personal or commercial) and the formats you need.</p></section>
+    <section className="page-section"><p className="eyebrow"><span/> CONTACT DETAILS</p><h2>Verified details only.</h2><p className="section-subtitle">Phone, WhatsApp, email and social account details have not yet been supplied, so this form is the available contact route. Do not rely on unverified contact information.</p></section>
+    <section className="page-section"><p className="eyebrow"><span/> PRIVACY</p><h2>Your enquiry should be handled carefully.</h2><p className="section-subtitle">Please do not submit passwords, payment card information or unrelated sensitive details. The form reports an error if the server does not confirm receipt.</p></section>
+    <section className="page-section"><p className="eyebrow"><span/> OTHER WAYS TO EXPLORE</p><div className="services-grid"><a className="service-card" href="/services"><h3>Explore services <ArrowRight size={15}/></h3><p>Compare photography, video and editing options.</p></a><a className="service-card" href="/portfolio"><h3>Browse portfolio <ArrowRight size={15}/></h3><p>See categories and sample visuals, clearly labelled as demos.</p></a></div></section>
   </SiteFrame>;
 }
 
