@@ -1,5 +1,15 @@
 # Admin Release Work Breakdown
 
+## Latest continuation update — 2026-10-30 (Preview deployment and isolated D1 read-only verification)
+
+- [x] Cloudflare Pages Preview deployment `d423c1a9-ee28-4d7a-8691-cc478ebc10fc` succeeded for branch `feat/admin-auth-pages`, commit `0466875379f82840fbee946ea979c91f81defe43`; Functions are enabled. Preview URL: https://d423c1a9.golden-films.pages.dev.
+- [x] Read-only checks against the Preview-bound D1 database confirmed the expected compatibility tables exist, including `categories`, `category_translations`, `projects`, `project_translations`, `media`, and `project_media`.
+- [x] Read-only checks confirmed `admin_users` has 0 rows and `admin_sessions` has 0 rows; the singleton `admin_setup` row is still incomplete (`completed_at IS NULL`). No admin account was created and these queries wrote zero rows.
+- [x] GitHub Actions run #286 passed for documentation commit `0466875379f82840fbee946ea979c91f81defe43`: https://github.com/pkdiv6548/Photography/actions/runs/41048333049.
+- [ ] Deployment success and schema inspection do not prove browser-based login/setup/logout, API authorization, CMS behavior, or media upload/read/delete work end to end. Live HTTP probes remain unverified from this execution environment.
+- [ ] Production-copy migration rehearsal against a verified export, isolated Preview R2 media E2E, and authenticated browser E2E remain release blockers. PR #81 stays Draft/unmerged; no production D1 changes or production deployment were made.
+
+
 ## Latest continuation update — 2026-10-30 (authenticated logout CI)
 
 - [x] Added an authenticated logout regression test that verifies session deletion, a logout audit insert, and expiration of the `__Host-gf_admin` cookie with `Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`, and `Max-Age=0`.
