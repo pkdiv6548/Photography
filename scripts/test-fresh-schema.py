@@ -101,7 +101,7 @@ def main():
         ("site_content_revisions", "changed_by", "admin_users", "id"),
     }
     actual_foreign_keys = set()
-    for table in REQUIRED_COLUMNS:
+    for table in set(REQUIRED_COLUMNS) | {"media"}:
         for fk in db.execute(f"PRAGMA foreign_key_list({table})"):
             actual_foreign_keys.add((table, fk["from"], fk["table"], fk["to"]))
     missing_foreign_keys = expected_foreign_keys - actual_foreign_keys
