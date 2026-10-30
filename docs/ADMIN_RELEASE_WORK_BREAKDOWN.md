@@ -1,5 +1,13 @@
 # Admin Release Work Breakdown
 
+## Latest continuation update — 2026-10-30 (least-privilege role regression CI)
+
+- [x] CI run #280 passed on current application/test head `986374f9e72e613893b1cb5d5d27aff134d8da52`: https://github.com/pkdiv6548/Photography/actions/runs/41042707694.
+- [x] All 9 main workflow steps passed: dependency install, frontend/Worker typecheck, Worker API regression tests, forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend build.
+- [x] Fresh-schema fixture now checks both the `admin_users.role` column default and the actual inserted value when a new admin omits the role; expected value is `editor`.
+- [ ] Passing synthetic SQLite/CI fixtures does not verify deployed Preview login/API E2E or a restored production D1 schema.
+- [ ] Production-copy migration rehearsal, isolated Preview R2 media E2E, and authenticated browser tests remain release blockers. PR #81 stays Draft/unmerged; no production database changes were made.
+
 ## Latest continuation update — 2026-10-30 (initial-owner regression coverage)
 
 - [x] Added regression coverage for the initial owner setup success path: the SQL explicitly inserts role `owner` and guards the insert on an empty `admin_users` table plus incomplete setup state.
