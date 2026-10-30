@@ -78,3 +78,22 @@ test("admin logout requires an authenticated session", async () => {
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), { error: "unauthorized" });
 });
+
+test("admin CMS content is never exposed without an authenticated session", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/admin/content"), { DB: mockDb() });
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+});
+
+test("admin system status requires an authenticated session", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/admin/system-status"), { DB: mockDb() });
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+});
+
+test("public content endpoint rejects unknown page slugs", async () => {
+  const response = await worker.fetch(new Request("https://example.test/api/content?page=admin"), { DB: mockDb() });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "invalid_page" });
+});
+
