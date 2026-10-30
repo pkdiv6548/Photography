@@ -50,3 +50,11 @@ Before calling the schema compatible, verify against a restored disposable Produ
 6. Execute all relevant Worker SQL paths against the disposable copy; a schema-column audit alone is not enough.
 
 These are static contract findings, not evidence that Production currently lacks any particular column or constraint. No live database was queried or modified for this second pass.
+
+
+## Latest branch validation (2026-10-31)
+
+- Commit `9b8767a8e7fdc2c8083ff63819ee847d73f1ba69` adds checks for the Worker write-path columns `projects.location`, `projects.demo_label`, CMS editor/publish fields, revision author, and quota ledger fields.
+- GitHub Actions run #350 completed successfully: typecheck, Worker API regression tests, forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend build all passed.
+- This is fixture-based CI only. The expanded audit SQL has not been run against a verified Production export or a disposable restore of that export. Production compatibility and live Preview flows remain unverified.
+- The audit script is diagnostic: a `PRESENT` column result does not prove type, CHECK, foreign-key, index, or data-mapping compatibility. Follow the disposable-copy acceptance checklist above before any production change.
