@@ -1,5 +1,14 @@
 # Admin Release Work Breakdown
 
+## Latest continuation update — 2026-10-30 (initial-owner regression coverage)
+
+- [x] Added regression coverage for the initial owner setup success path: the SQL explicitly inserts role `owner` and guards the insert on an empty `admin_users` table plus incomplete setup state.
+- [x] Added regression coverage that a zero-row guarded insert returns HTTP 409 `initial_setup_already_completed` and uses a transactional D1 batch.
+- [x] GitHub Actions run #274 passed on head `0f66f3828c4d92d4dc595ae31cc8aec2942d9221`: https://github.com/pkdiv6548/Photography/actions/runs/41038818256. Dependency installation, frontend/Worker typecheck, Worker API regression tests, forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend build all passed.
+- [x] Cloudflare Pages reported Preview deployment successful for commit `0f66f38`: https://ab6ce6e9.golden-films.pages.dev. This confirms deployment status only, not live API/D1 end-to-end behavior.
+- [ ] Still blocked on browser E2E of setup/login/session/dashboard against isolated Preview, full schema/constraint contract verification, isolated R2 media checks, and migration rehearsal against a verified production export restored to disposable D1.
+- [ ] PR #81 remains Draft and unmerged. No production database writes, migration, binding/secret changes, or production deployment were performed.
+
 ## Security review update — 2026-10-30
 
 - [x] Identified and corrected a least-privilege issue in the candidate production-copy migration: legacy `admin_users` now receive `role='editor'` by default instead of being silently elevated to owner.
