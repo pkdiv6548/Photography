@@ -89,3 +89,21 @@ SELECT e.table_name, e.target_columns,
   END AS result
 FROM expected_unique e
 ORDER BY e.table_name;
+
+-- Third result set: columns used by less-obvious Worker write paths.
+-- These were intentionally split out so missing publish/audit/quota fields are visible.
+WITH expected_extra(table_name, column_name) AS (
+  SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]')
+  FROM json_each('[
+    ["projects","location"],["projects","demo_label"],
+    ["site_content","updated_by"],["site_content","published_at"],
+    ["site_content_revisions","changed_by"],
+    ["gf_monthly_media_usage","month_key"],["gf_monthly_media_usage","used_bytes"]
+  ]')
+)
+SELECT e.table_name, e.column_name,
+  CASE WHEN NOT EXISTS (
+    SELECT 1 FROM pragma_table_info(e.table_name) p WHERE p.name = e.column_name
+  ) THEN 'MISSING' ELSE 'PRESENT' END AS result
+FROM expected_extra e
+ORDER BY e.table_name, e.column_name;
