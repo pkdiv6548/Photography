@@ -513,6 +513,7 @@ test("same-origin requests are allowed while cross-origin preflights are rejecte
 test("initial admin setup explicitly assigns the owner role", async () => {
   const statements: string[] = [];
   const db = {
+    async batch(_statements: unknown[]) { return [{ success: true, meta: { changes: 1 } }, { success: true, meta: { changes: 1 } }, { success: true, meta: { changes: 1 } }]; },
     prepare(query: string) {
       statements.push(query);
       return {
@@ -551,6 +552,7 @@ test("initial admin setup explicitly assigns the owner role", async () => {
 test("initial admin setup refuses when no owner row is inserted", async () => {
   const statements: string[] = [];
   const db = {
+    async batch(_statements: unknown[]) { return [{ success: true, meta: { changes: 0 } }, { success: true, meta: { changes: 0 } }, { success: true, meta: { changes: 0 } }]; },
     prepare(query: string) {
       statements.push(query);
       return {
