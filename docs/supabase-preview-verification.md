@@ -53,7 +53,8 @@ Copy this table into the PR comment or a separate test report when running the c
 | MP4/WebM upload and read | Preview test project | Valid video under 20 MiB succeeds | Not run | Blocked | |
 | Unsupported type / over 20 MiB | Preview | Request rejected; quota unchanged | Not run | Blocked |
 | MIME/signature mismatch (e.g. text payload labelled `image/jpeg`) | Automated Worker test + Preview where practical | HTTP 415 `file_signature_mismatch`; no object or quota reservation | Not run | Blocked | |
-| Shared 100 MiB monthly quota | Disposable/test environment | Over-limit upload rejected across admins | Not run | Blocked | |
+| Shared 100 MiB monthly quota | Disposable/test environment | Over-limit upload rejected across admins | Not run | Blocked |
+| Automated quota guard (mocked D1 fixture) | GitHub Actions run #329 / commit `268377826d3d60012c6bf5d2a2d045824186a062` | Over-limit reservation returns 413 and storage is not contacted | Passed | Pass | Automated regression test only; does not replace live Preview quota verification | |
 | Delete and unpublished-media access | Preview test assets | Deleted asset no longer served; draft asset inaccessible publicly | Not run | Blocked | |
 | Enquiry validation and persistence | Preview | Valid test enquiry persists; invalid input rejected | Not run | Blocked | |
 | Mobile and page-by-page regression | Preview | Layout/navigation/content behave as intended | Not run | Blocked | |
