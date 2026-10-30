@@ -27,5 +27,7 @@ jobs:
         run: npm test
       - name: Run forward-migration SQLite fixture test
         run: python3 scripts/test-forward-migration.py
+      - name: Run fresh-schema Worker contract fixture test
+        run: python3 scripts/test-fresh-schema.py
       - name: Build frontend
         run: npm run build
