@@ -1,5 +1,16 @@
 # Admin Release Work Breakdown
 
+## Latest continuation update — 2026-10-30 (CI #287 and current Preview deployment)
+
+- [x] GitHub Actions run #287 passed for branch `feat/admin-auth-pages`, commit `25aa45a9116b54cb0011fd386a78729b554eac4b`; the `build-and-test` job completed successfully: https://github.com/pkdiv6548/Photography/actions/runs/41048647160.
+- [x] Cloudflare Pages project API confirms Preview deployment `c05ea27f-a5c9-46cf-aa04-5160bc279768` is active and its build/deploy stages succeeded for the same commit. Preview URL: https://c05ea27f.golden-films.pages.dev; branch alias: https://feat-admin-auth-pages.golden-films.pages.dev.
+- [x] PR #81 remains open and Draft; no merge was performed.
+- [ ] This CI/deployment result does not establish live browser/API E2E. Admin setup, login/session/logout, authenticated CMS flows, isolated Preview R2 upload/read/delete, and production-copy migration rehearsal remain release blockers.
+- [ ] Preview D1 read-only inspection previously showed no admin users or sessions and an incomplete setup row. Do not create an owner account or write to production without explicit authorization and an approved secret-handling procedure.
+- [ ] Production deployment and production database were not changed by this continuation.
+
+# Admin Release Work Breakdown
+
 ## Latest continuation update — 2026-10-30 (Preview deployment and isolated D1 read-only verification)
 
 - [x] Cloudflare Pages Preview deployment `d423c1a9-ee28-4d7a-8691-cc478ebc10fc` succeeded for branch `feat/admin-auth-pages`, commit `0466875379f82840fbee946ea979c91f81defe43`; Functions are enabled. Preview URL: https://d423c1a9.golden-films.pages.dev.
