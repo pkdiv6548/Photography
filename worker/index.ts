@@ -1001,11 +1001,11 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         .first<{ id: string }>();
       if (!project?.id) return json({ error: "project_save_unavailable" }, 503);
       await env.DB.prepare(
-        "INSERT INTO project_translations (project_id, locale, title, description) VALUES (?, 'en', ?, ?) " +
+        "INSERT INTO project_translations (project_id, language, locale, title, description) VALUES (?, 'en', 'en', ?, ?) " +
         "ON CONFLICT(project_id, locale) DO UPDATE SET title = excluded.title, description = excluded.description"
       ).bind(project.id, titleEn, descriptionEn).run();
       await env.DB.prepare(
-        "INSERT INTO project_translations (project_id, locale, title, description) VALUES (?, 'hi', ?, ?) " +
+        "INSERT INTO project_translations (project_id, language, locale, title, description) VALUES (?, 'hi', 'hi', ?, ?) " +
         "ON CONFLICT(project_id, locale) DO UPDATE SET title = excluded.title, description = excluded.description"
       ).bind(project.id, titleHi, descriptionHi).run();
       await env.DB.prepare(
