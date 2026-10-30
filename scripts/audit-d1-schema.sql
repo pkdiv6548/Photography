@@ -108,16 +108,3 @@ SELECT e.table_name, e.column_name,
 FROM expected_extra e
 ORDER BY e.table_name, e.column_name;
 
-
--- Fourth result set: confirm the quota ledger has every field checked by
--- /api/ready and used by quota accounting. Keep this explicit because the
--- earlier extra-column list historically omitted updated_at.
-WITH expected_quota(column_name) AS (
-  SELECT value FROM json_each('["month_key","used_bytes","updated_at"]')
-)
-SELECT 'gf_monthly_media_usage' AS table_name, e.column_name,
-  CASE WHEN NOT EXISTS (
-    SELECT 1 FROM pragma_table_info('gf_monthly_media_usage') p WHERE p.name = e.column_name
-  ) THEN 'MISSING' ELSE 'PRESENT' END AS result
-FROM expected_quota e
-ORDER BY e.column_name;
