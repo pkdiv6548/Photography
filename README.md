@@ -49,7 +49,7 @@ All placeholder/demo media must be clearly labeled as sample content and must no
 
 ## Supabase Storage integration (free-budget target)
 
-The Worker uses only the private Supabase Storage bucket `golden-films-media` for media; the R2 fallback has been removed so a missing Supabase configuration fails closed rather than accidentally using a potentially billable R2 binding. The bucket is configured for JPEG, PNG, WebP, GIF, MP4 and WebM, with a 50 MB provider-level file cap. The application currently enforces a stricter 20 MB per-file cap and a shared 100 MiB monthly upload budget in D1.
+The Worker uses only Supabase Storage for media; the R2 fallback has been removed so a missing Supabase configuration fails closed rather than accidentally using a potentially billable R2 binding. The bucket `golden-films-media` currently exists in the `shopping-mart` Supabase project as a private, isolated bucket, but that project contains unrelated application tables. **Do not configure the Photography Worker with the Shopping Mart service-role key for production.** First restore database access to the separate Supabase project or explicitly establish a dedicated free Photography project, then create/verify this bucket in that selected project. The bucket currently present is configured for JPEG, PNG, WebP, GIF, MP4 and WebM, with a 50 MB provider-level file cap. The application enforces a stricter 20 MB per-file cap and a shared 100 MiB monthly upload budget in D1.
 
 Before enabling uploads in any environment, configure these as **server-side Pages Function secrets/environment variables** (never in Vite/client variables or committed files):
 
