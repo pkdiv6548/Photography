@@ -38,8 +38,99 @@ interface R2BucketBinding {
 interface Env {
   DB?: D1Binding;
   ASSETS?: StaticAssetsBinding;
+  SUPABASE_URL?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+  SUPABASE_STORAGE_BUCKET?: string;
+  // Legacy R2 fallback is retained only during migration.
   MEDIA_BUCKET?: R2BucketBinding;
   ADMIN_SETUP_SECRET?: string;
+}
+
+const MONTHLY_MEDIA_UPLOAD_LIMIT_BYTES = 100 * 1024 * 1024;
+const SUPABASE_MEDIA_MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+function isSupabaseStorageConfigured(env: Env): boolean {
+  return Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_STORAGE_BUCKET);
+}
+
+function supabaseObjectUrl(env: Env, key: string): string {
+  const base = env.SUPABASE_URL!.replace(/\\/$/, "");
+  const bucket = encodeURIComponent(env.SUPABASE_STORAGE_BUCKET!);
+  const objectPath = key.split("/").map((part) => encodeURIComponent(part)).join("/");
+  return `${base}/storage/v1/object/${bucket}/${objectPath}`;
+}
+
+function supabaseStorageHeaders(env: Env, contentType?: string): Headers {
+  const headers = new Headers({
+    apikey: env.SUPABASE_SERVICE_ROLE_KEY!,
+    authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY!}`,
+  });
+  if (contentType) headers.set("content-type", contentType);
+  return headers;
+}
+
+async function putMediaObject(env: Env, key: string, body: ReadableStream<Uint8Array>, contentType: string): Promise<void> {
+  if (isSupabaseStorageConfigured(env)) {
+    const headers = supabaseStorageHeaders(env, contentType);
+    headers.set("x-upsert", "false");
+    headers.set("cache-control", "max-age=31536000");
+    const response = await fetch(supabaseObjectUrl(env, key), { method: "POST", headers, body });
+    if (!response.ok) throw new Error(`supabase_storage_upload_failed_${response.status}`);
+    return;
+  }
+  if (env.MEDIA_BUCKET) {
+    await env.MEDIA_BUCKET.put(key, body, { httpMetadata: { contentType } });
+    return;
+  }
+  throw new Error("media_storage_not_configured");
+}
+
+async function getMediaObject(env: Env, key: string): Promise<Response | null> {
+  if (isSupabaseStorageConfigured(env)) {
+    const response = await fetch(supabaseObjectUrl(env, key), { method: "GET", headers: supabaseStorageHeaders(env) });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`supabase_storage_download_failed_${response.status}`);
+    return response;
+  }
+  if (env.MEDIA_BUCKET) {
+    const object = await env.MEDIA_BUCKET.get(key);
+    if (!object) return null;
+    return new Response(object.body, { headers: {
+      "content-type": object.httpMetadata?.contentType || "application/octet-stream",
+      ...(object.httpEtag ? { etag: object.httpEtag } : {}),
+    } });
+  }
+  throw new Error("media_storage_not_configured");
+}
+
+async function deleteMediaObject(env: Env, key: string): Promise<void> {
+  if (isSupabaseStorageConfigured(env)) {
+    const url = `${env.SUPABASE_URL!.replace(/\\/$/, "")}/storage/v1/object/${encodeURIComponent(env.SUPABASE_STORAGE_BUCKET!)}`;
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: supabaseStorageHeaders(env, "application/json"),
+      body: JSON.stringify({ prefixes: [key] }),
+    });
+    if (!response.ok && response.status !== 404) throw new Error(`supabase_storage_delete_failed_${response.status}`);
+    return;
+  }
+  if (env.MEDIA_BUCKET) { await env.MEDIA_BUCKET.delete(key); return; }
+  throw new Error("media_storage_not_configured");
+}
+
+async function reserveMonthlyMediaBytes(db: D1Binding, bytes: number): Promise<{ reserved: boolean; monthKey: string }> {
+  const monthKey = new Date().toISOString().slice(0, 7);
+  const results = await db.batch([
+    db.prepare("INSERT INTO gf_monthly_media_usage (month_key, used_bytes) VALUES (?, 0) ON CONFLICT(month_key) DO NOTHING").bind(monthKey),
+    db.prepare("UPDATE gf_monthly_media_usage SET used_bytes = used_bytes + ? WHERE month_key = ? AND used_bytes + ? <= ?")
+      .bind(bytes, monthKey, bytes, MONTHLY_MEDIA_UPLOAD_LIMIT_BYTES),
+  ]);
+  return { reserved: (results[1]?.meta?.changes ?? 0) > 0, monthKey };
+}
+
+async function releaseMonthlyMediaBytes(db: D1Binding, monthKey: string, bytes: number): Promise<void> {
+  await db.prepare("UPDATE gf_monthly_media_usage SET used_bytes = MAX(0, used_bytes - ?) WHERE month_key = ?")
+    .bind(bytes, monthKey).run();
 }
 
 interface EnquiryInput {
@@ -647,33 +738,31 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
 
   if (url.pathname.startsWith("/api/media/") && request.method === "GET") {
-    if (!env.DB || !env.MEDIA_BUCKET) return json({ error: "media_storage_not_configured" }, 503);
+    if (!env.DB || (!isSupabaseStorageConfigured(env) && !env.MEDIA_BUCKET)) return json({ error: "media_storage_not_configured" }, 503);
     let key = "";
     try { key = decodeURIComponent(url.pathname.slice("/api/media/".length)); } catch { return json({ error: "media_not_found" }, 404); }
-    if (!/^projects\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:jpg|jpeg|png|webp|gif|mp4|webm)$/i.test(key)) {
-      return json({ error: "media_not_found" }, 404);
-    }
+    if (!/^projects\\/[0-9a-f-]{36}\\/[0-9a-f-]{36}\\.(?:jpg|jpeg|png|webp|gif|mp4|webm)$/i.test(key)) return json({ error: "media_not_found" }, 404);
     try {
       const allowed = await env.DB.prepare(
         "SELECT m.media_type FROM project_media m JOIN projects p ON p.id = m.project_id " +
         "WHERE m.original_key = ? AND m.is_public = 1 AND p.status = 'published'"
       ).bind(key).first<{ media_type: string }>();
       if (!allowed) return json({ error: "media_not_found" }, 404);
-      const object = await env.MEDIA_BUCKET.get(key);
+      const object = await getMediaObject(env, key);
       if (!object) return json({ error: "media_not_found" }, 404);
       const extension = key.split(".").pop()?.toLowerCase() ?? "";
       const fallbackType: Record<string, string> = {
         jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif",
         mp4: "video/mp4", webm: "video/webm",
       };
-      return new Response(object.body, {
-        headers: {
-          "content-type": object.httpMetadata?.contentType || fallbackType[extension] || "application/octet-stream",
-          "cache-control": "public, max-age=31536000, immutable",
-          "etag": object.httpEtag || "",
-          "x-content-type-options": "nosniff",
-        }
+      const headers = new Headers({
+        "content-type": object.headers.get("content-type") || fallbackType[extension] || "application/octet-stream",
+        "cache-control": "public, max-age=31536000, immutable",
+        "x-content-type-options": "nosniff",
       });
+      const etag = object.headers.get("etag");
+      if (etag) headers.set("etag", etag);
+      return new Response(object.body, { headers });
     } catch {
       return json({ error: "media_unavailable" }, 503);
     }
@@ -1022,9 +1111,9 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!env.DB) return json({ error: "database_not_configured" }, 503);
     const admin = await currentAdmin(request, env);
     if (!admin) return json({ error: "unauthorized" }, 401);
-    if (!env.MEDIA_BUCKET) return json({ error: "media_storage_not_configured" }, 503);
+    if (!isSupabaseStorageConfigured(env) && !env.MEDIA_BUCKET) return json({ error: "media_storage_not_configured" }, 503);
     const declaredLength = Number(request.headers.get("content-length") ?? "0");
-    if (declaredLength > 20 * 1024 * 1024 + 64 * 1024) return json({ error: "file_too_large" }, 413);
+    if (declaredLength > SUPABASE_MEDIA_MAX_FILE_BYTES + 64 * 1024) return json({ error: "file_too_large" }, 413);
     let form: FormData;
     try { form = await request.formData(); } catch { return json({ error: "invalid_multipart_form" }, 400); }
     const file = form.get("file");
@@ -1035,7 +1124,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const isPublic = form.get("isPublic") === "true";
     const isCover = form.get("isCover") === "true";
     if (!file || typeof file === "string" || !projectId) return json({ error: "validation_failed" }, 400);
-    if (file.size < 1 || file.size > 20 * 1024 * 1024) return json({ error: "file_too_large", maxBytes: 20 * 1024 * 1024 }, 413);
+    if (file.size < 1 || file.size > SUPABASE_MEDIA_MAX_FILE_BYTES) return json({ error: "file_too_large", maxBytes: SUPABASE_MEDIA_MAX_FILE_BYTES }, 413);
     if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) return json({ error: "validation_failed" }, 400);
     const mimeExtensions: Record<string, string> = {
       "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
@@ -1053,12 +1142,15 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       if (isCover && !isPublic) return json({ error: "cover_must_be_public" }, 400);
       const id = crypto.randomUUID();
       const key = "projects/" + projectId + "/" + id + "." + extension;
-      await env.MEDIA_BUCKET.put(key, file.stream(), {
-        httpMetadata: { contentType: file.type.toLowerCase() },
-        customMetadata: { projectId, mediaId: id, uploadedBy: admin.id },
-      });
-      const previewUrl = "/api/media/" + key;
+      const reservation = await reserveMonthlyMediaBytes(env.DB, file.size);
+      if (!reservation.reserved) {
+        return json({ error: "monthly_upload_quota_exceeded", limitBytes: MONTHLY_MEDIA_UPLOAD_LIMIT_BYTES, month: reservation.monthKey }, 413);
+      }
+      let objectUploaded = false;
       try {
+        await putMediaObject(env, key, file.stream(), file.type.toLowerCase());
+        objectUploaded = true;
+        const previewUrl = "/api/media/" + key;
         await env.DB.prepare(
           "INSERT INTO project_media (id, project_id, media_type, preview_url, original_key, alt_en, alt_hi, sort_order, is_public) " +
           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -1070,11 +1162,12 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         await env.DB.prepare(
           "INSERT INTO audit_logs (id, admin_user_id, action, target_type, target_id) VALUES (?, ?, ?, 'media', ?)"
         ).bind(crypto.randomUUID(), admin.id, isPublic ? "media_uploaded_public" : "media_uploaded_draft", id).run();
+        return json({ ok: true, id, previewUrl, mediaType, isPublic, isCover, monthlyLimitBytes: MONTHLY_MEDIA_UPLOAD_LIMIT_BYTES }, 201);
       } catch (error) {
-        await env.MEDIA_BUCKET.delete(key).catch(() => undefined);
+        if (objectUploaded) await deleteMediaObject(env, key).catch(() => undefined);
+        await releaseMonthlyMediaBytes(env.DB, reservation.monthKey, file.size).catch(() => undefined);
         throw error;
       }
-      return json({ ok: true, id, previewUrl, mediaType, isPublic, isCover }, 201);
     } catch {
       return json({ error: "media_upload_unavailable" }, 503);
     }
@@ -1271,14 +1364,14 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         enquirySchemaReady,
         portfolioSchemaReady,
         contentTablesReady,
-        mediaStorageConfigured: Boolean(env.MEDIA_BUCKET),
+        mediaStorageConfigured: isSupabaseStorageConfigured(env) || Boolean(env.MEDIA_BUCKET),
         blockers: [
           ...(!env.ADMIN_SETUP_SECRET ? ["ADMIN_SETUP_SECRET is not configured"] : []),
           ...(!adminRoleSchemaReady ? ["Owner/editor role migration is pending"] : []),
           ...(!enquirySchemaReady ? ["Enquiry consent/schema migration is pending"] : []),
           ...(!portfolioSchemaReady ? ["Portfolio schema is incompatible"] : []),
           ...(!contentTablesReady ? ["CMS content tables are missing"] : []),
-          ...(!env.MEDIA_BUCKET ? ["R2 media bucket binding is not configured"] : []),
+          ...(!isSupabaseStorageConfigured(env) && !env.MEDIA_BUCKET ? ["Supabase Storage secrets (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET) are not configured"] : []),
         ],
       });
     } catch {
