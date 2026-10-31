@@ -822,12 +822,15 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       const adminCount = Number(adminCountRow?.count ?? 0);
       const adminSetupComplete = Boolean(setup?.completed_at) || adminCount > 0;
       const blockers: string[] = [];
+      const supabaseStorageConfigured = isSupabaseStorageConfigured(env);
       if (!env.ADMIN_SETUP_SECRET) blockers.push("admin_setup_secret_missing");
+      if (!supabaseStorageConfigured) blockers.push("supabase_storage_not_configured");
       if (adminSetupComplete) blockers.push("admin_setup_already_completed");
       return json({
         status: "ready",
         schema: "legacy-compatible",
         adminSetupSecretConfigured: Boolean(env.ADMIN_SETUP_SECRET),
+        supabaseStorageConfigured,
         adminSetupComplete,
         adminCount,
         blockers,
