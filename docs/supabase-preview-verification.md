@@ -16,7 +16,7 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 
 ## Current prerequisite status
 
-**Latest confirmed automated verification (2026-10-31):** GitHub Actions run [#369](https://github.com/pkdiv6548/Photography/actions/runs/41147089150) (`Golden Films checks`) completed with conclusion `success` for head commit `d851d6737289d8baf9a0280fb340a5530ecc25db`. The workflow's typecheck, Worker API regression tests, forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend build passed. Cloudflare Pages Preview deployment for this same commit also reports `success` and uses the branch alias `https://feat-supabase-storage-free-t.golden-films.pages.dev`. This is build/deployment evidence only; it does not confirm live API readiness, browser behavior, real Supabase Storage operations, or Production schema compatibility.
+**Latest confirmed automated verification (2026-10-31):** GitHub Actions run [#370](https://github.com/pkdiv6548/Photography/actions/runs/41147511250) (`Golden Films checks`) completed with conclusion `success` for head commit `633c04873105c6e37693e54859319cdb8c44f548`. The workflow's typecheck, Worker API regression tests, forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend build passed. Cloudflare Pages Preview deployment for this same commit also reports `success` and uses the branch alias `https://feat-supabase-storage-free-t.golden-films.pages.dev`. This is build/deployment evidence only; it does not confirm live API readiness, browser behavior, real Supabase Storage operations, or Production schema compatibility.
 
 **Configuration and read-only D1 schema audit (Cloudflare API, 2026-10-30):**
 
@@ -69,7 +69,7 @@ Copy this table into the PR comment or a separate test report when running the c
 | Unsupported type / over 20 MiB | Preview | Request rejected; quota unchanged | Not run | Blocked |
 | MIME/signature mismatch (e.g. text payload labelled `image/jpeg`) | Automated Worker test + Preview where practical | HTTP 415 `file_signature_mismatch`; no object or quota reservation | Not run | Blocked | |
 | Shared 100 MiB monthly quota | Disposable/test environment | Over-limit upload rejected across admins | Not run | Blocked |
-| Automated quota guard (mocked D1 fixture) | GitHub Actions run #329 / commit `268377826d3d60012c6bf5d2a2d045824186a062` | Over-limit reservation returns 413 and storage is not contacted | Passed | Pass | Automated regression test only; does not replace live Preview quota verification | |
+| Automated quota guard (mocked D1 fixture) | GitHub Actions run #370 / commit `633c04873105c6e37693e54859319cdb8c44f548` | Over-limit reservation returns 413 and storage is not contacted | Passed | Pass | Automated regression test only; does not replace live Preview quota verification | |
 | Delete and unpublished-media access | Preview test assets | Deleted asset no longer served; draft asset inaccessible publicly | Not run | Blocked | |
 | Enquiry validation and persistence | Preview | Valid test enquiry persists; invalid input rejected | Not run | Blocked | |
 | Mobile and page-by-page regression | Preview | Layout/navigation/content behave as intended | Not run | Blocked | |
