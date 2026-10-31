@@ -14,13 +14,13 @@ REQUIRED_COLUMNS = {
     "project_media": {"id", "project_id", "media_type", "preview_url", "original_key", "alt_en", "alt_hi", "sort_order", "is_public"},
     "enquiries": {"id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"},
     "enquiry_rate_limits": {"ip_hash", "window_start", "request_count"},
-    "admin_users": {"id", "email", "password_hash", "password_salt", "role", "is_active"},
-    "admin_sessions": {"id", "admin_user_id", "token_hash", "expires_at"},
-    "admin_setup": {"id", "completed_at"},
+    "admin_users": {"id", "email", "password_hash", "password_salt", "role", "is_active", "created_at", "last_login_at"},
+    "admin_sessions": {"id", "admin_user_id", "token_hash", "expires_at", "created_at", "last_seen_at"},
+    "admin_setup": {"id", "completed_at", "created_at"},
     "auth_rate_limits": {"rate_key", "window_started_at", "request_count"},
     "audit_logs": {"id", "admin_user_id", "action", "target_type", "target_id", "created_at"},
-    "site_content": {"page_slug", "draft_json", "published_json", "status", "updated_at"},
-    "site_content_revisions": {"id", "page_slug", "content_json", "revision_status", "created_at"},
+    "site_content": {"page_slug", "draft_json", "published_json", "status", "updated_by", "updated_at", "published_at"},
+    "site_content_revisions": {"id", "page_slug", "content_json", "revision_status", "changed_by", "created_at"},
 }
 
 REQUIRED_INDEXES = {
