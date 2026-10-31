@@ -57,6 +57,12 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
   const missingLoginColumn = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
   assert.equal(missingLoginColumn.status, 503);
   assert.deepEqual(await missingLoginColumn.json(), { error: "database_schema_incompatible" });
+
+  schema.admin_users.push("last_login_at");
+  schema.site_content = schema.site_content.filter(name => name !== "published_at");
+  const missingPublishColumn = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
+  assert.equal(missingPublishColumn.status, 503);
+  assert.deepEqual(await missingPublishColumn.json(), { error: "database_schema_incompatible" });
 });
 
 test("readiness endpoint rejects a schema missing the enquiry consent column", async () => {
