@@ -103,3 +103,16 @@ After changing Cloudflare Pages Preview secrets, create a new Preview deployment
 - This is direct evidence that the currently viewed Preview deployment reports owner setup complete but media readiness blocked by Supabase Storage configuration. Do not repeat admin setup.
 - The screenshot does not expose secret values and does not prove actual upload/read/delete behavior. Storage end-to-end checks remain blocked. The user has explicitly put service-role-key setup on hold; do not request or change it until the user resumes that work.
 - Next safe action while that hold remains: preserve this readiness evidence and continue only with non-secret, read-only review/documentation. Do not merge PR #87 or change Production.
+
+
+## Read-only media lifecycle review (2026-10-31)
+
+Reviewed `worker/index.ts` and `tests/admin-media.test.ts` on branch `feat/supabase-storage-free-tier`. This is a source-code review only; no live Storage request or database write was performed.
+
+- [x] Upload path validates authenticated admin, configured Storage, streamed multipart size, file size, allowed MIME type, file signature, project existence, cover constraints, and monthly quota before writing the object.
+- [x] If object upload or the D1 batch fails after quota reservation, the handler attempts to delete the uploaded object and release the reserved monthly bytes.
+- [ ] **Follow-up risk:** compensation is best-effort: object deletion errors are swallowed, and quota release is attempted even if object deletion fails. If the Storage delete fails, an orphaned object could remain while its bytes are no longer counted in the monthly ledger. Before launch, add a durable cleanup/reconciliation strategy or ensure failed cleanup is recorded for operator review; cover this branch with an injected-failure test.
+- [ ] **Delete-flow gap:** the reviewed Worker media routes include upload, external media registration, replace, and hide; no dedicated media-delete route was found in `worker/index.ts`. Hiding is not equivalent to deleting the underlying Storage object or its D1 record. The runbook's delete check must remain blocked until a safe owner-authorized delete workflow exists and is tested, or the checklist is explicitly changed to test hide semantics only.
+- [ ] Add regression tests for: Storage object upload failure releases quota; D1 batch failure attempts object cleanup and releases quota; cleanup failure is surfaced/recorded; hide does not accidentally expose media; and any future delete operation refuses to remove the current cover until it is replaced.
+
+These findings do not change the Preview readiness state: live Supabase Storage remains blocked by the user's explicit service-role-key hold. Do not request the key, change secrets, merge PRs, or modify Production as part of this review.
