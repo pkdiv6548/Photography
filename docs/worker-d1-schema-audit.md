@@ -180,3 +180,12 @@ This is catalog-level evidence only. It does not establish that API routes are a
 - GitHub Actions run [#413](https://github.com/pkdiv6548/Photography/actions/runs/41199062706) completed with conclusion `success` for the same commit.
 - Attempts to open the Preview homepage and `/api/health` and `/api/ready` via the available web verification path returned inaccessible/internal-error results. Therefore this tool session has not established runtime endpoint health; this is not proof that the endpoints are down.
 - No Production configuration, secrets, deployment, or D1 data were changed. Keep the rollout gates in force: configure Preview-only secrets securely, verify endpoints and real Storage workflows from a permitted browser/network, and validate migration against a disposable restore of a verified Production backup before any rollout.
+
+
+## Latest verification follow-up — 2026-10-31
+
+- GitHub Actions run [#415](https://github.com/pkdiv6548/Photography/actions/runs/41199265276) succeeded for commit `3aefbb7f8ce668a7a98fbc9e54e39f277f7af4b4`.
+- Cloudflare Pages Preview deployment `82a80498-2303-4594-9533-2c83ba150093` completed successfully at https://82a80498.golden-films.pages.dev for branch `feat/supabase-storage-free-tier`.
+- Runtime endpoint health and real Supabase upload/read/delete remain unverified through the available network path. Do not interpret deployment success as a runtime smoke-test pass.
+- Preview secrets remain a manual prerequisite: configure `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_SETUP_SECRET` as secrets in Preview only. Production schema mismatch and backup-restore migration test remain rollout blockers.
+- No Production configuration, secrets, database, or deployment was changed. Keep PRs #63 and #87 Draft until all safety gates pass.
