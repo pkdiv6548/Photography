@@ -88,9 +88,10 @@ After changing Cloudflare Pages Preview secrets, create a new Preview deployment
 5. If the endpoint still returns `admin_setup_not_configured`, investigate deployment/environment binding behavior and Worker routing before retrying setup. Do not change Production or merge a PR as a workaround.
 
 
-## Latest CI confirmation (2026-10-31, run #418)
+## Latest CI confirmation (2026-10-31, run #419)
 
-- GitHub Actions run [#418](https://github.com/pkdiv6548/Photography/actions/runs/41199730406) completed successfully for commit `e0d14f08e36044928a4fab8cd874b3c475007998`.
-- The commit only updates three media-test descriptions to name Supabase Storage rather than R2; it does not change test logic or runtime behavior.
-- Runs #416, #417, and #418 all completed successfully. This remains CI/fixture evidence only; the Preview deployment for the latest commit, Preview secrets/readiness, and live Supabase upload/read/delete flows are not confirmed by these CI runs.
-- Keep PR #87 in Draft. Do not merge or change Production until a verified Production D1 backup has been restored to a disposable database, the schema/Worker contract has passed against that restore, Preview secrets are configured in the Preview environment, and end-to-end Preview smoke tests pass.
+- GitHub Actions run [#419](https://github.com/pkdiv6548/Photography/actions/runs/41199931576) completed successfully for commit `0842d583c80c4eb417416e56f7f7fa7e0154b40f`.
+- Run #419 validates the configured automated checks: dependency installation, frontend/Worker typecheck, Worker API regression tests, forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend production build.
+- Earlier commit `e0d14f08e36044928a4fab8cd874b3c475007998` only changed three media-test descriptions to name Supabase Storage rather than R2; it did not change test logic or runtime behavior.
+- CI success is not live verification. The latest Preview deployment status, Preview secrets/readiness, real Supabase upload/read/delete flows, and Production schema compatibility are still unverified or blocked.
+- Keep PR #87 in Draft and PR #63 in Draft. Do not merge or change Production until a verified Production D1 backup has been restored to a disposable database, the complete Worker SQL/schema contract has passed against that restore, Preview secrets are configured in the Preview environment, and end-to-end Preview smoke tests pass.
