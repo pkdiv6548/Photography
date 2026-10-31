@@ -399,7 +399,7 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
         errorName: error instanceof Error ? error.name : "UnknownError",
         error: safeMessage.slice(0, 300),
       }));
-      return json({ error: "admin_setup_unavailable" }, 503);
+      return json({ error: "admin_setup_unavailable", diagnosticStage: setupStage }, 503);
     }
   }
 
