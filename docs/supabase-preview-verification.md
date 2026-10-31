@@ -149,3 +149,15 @@ Reviewed `src/App.tsx` and `src/data.ts` only; this is not a device/browser visu
 - [ ] Real Storage tests remain blocked because the Preview readiness evidence reports `supabaseStorageConfigured: false`; the user explicitly placed service-role-key setup on hold. Do not request/change the key.
 - [ ] Mobile review remains source-only; viewport, visual overflow, form states, and route-by-route browser checks are still pending.
 - [ ] Keep PR #87 and PR #63 unmerged. No Production D1, secrets, schema, or deployment changes were made for this checkpoint.
+
+
+## Latest CI and Preview deployment checkpoint (2026-10-31, commit 87557a9)
+
+- [x] GitHub Actions `build-and-test` passed for commit `87557a9401e1c9eecb62dd940d843c5f6a436e88` (run [#41219658910](https://github.com/pkdiv6548/Photography/actions/runs/41219658910)).
+- [x] Cloudflare Pages reports a successful Preview deployment for the same commit: https://77622461.golden-films.pages.dev. Branch alias: https://feat-supabase-storage-free-t.golden-films.pages.dev.
+- [x] This commit updates verification documentation only; CI/deployment success is not evidence of real Storage operations or visual browser verification.
+- [ ] Media lifecycle failure coverage remains incomplete: upload failure compensation, D1 batch failure cleanup, and cleanup failure reporting need injected-failure tests. Current cleanup catches and suppresses Storage deletion errors, then still attempts to release quota, so a failed delete may leave an uncounted orphan object.
+- [ ] No dedicated media-delete endpoint was found in the reviewed Worker routes. The existing hide endpoint is not deletion; a safe owner-authorized delete flow must protect current cover images and handle both D1 and Storage consistency.
+- [ ] Preview Storage is still blocked by the previously observed `supabaseStorageConfigured: false`; do not request or change the service-role key while its setup remains on hold.
+- [ ] Mobile checks remain source-only. Actual 320/360/390px visual checks and form/navigation regression are pending.
+- [ ] Keep PR #87 and PR #63 unmerged. No Production D1, secrets, schema, or live Storage writes were changed for this checkpoint.
