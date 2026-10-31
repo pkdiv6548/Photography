@@ -87,3 +87,17 @@ These are static contract findings, not evidence that Production currently lacks
 - Confirmed successful steps: dependency installation, frontend/Worker TypeScript checks, Worker API regression tests, candidate forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend production build.
 - This is another CI/build confirmation, not a Production D1 export/restore test and not a live Preview API or Supabase Storage test. No Production database, secret, or deployment setting was changed.
 - PR #87 remains open and Draft. Keep it unmerged until the real schema baseline is reconciled, Preview secrets are configured through the dashboard, and the end-to-end acceptance checks pass.
+
+
+## Blocker-first continuation update (2026-10-31, CI run #379)
+
+- CI run [#379](https://github.com/pkdiv6548/Photography/actions/runs/41150472267) completed successfully on commit `aa97c1d789750c5b61bbd65523a41658c5e1f263`. All steps passed: dependency install, frontend/Worker typecheck, Worker API regression tests, forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend production build.
+- The readiness contract now explicitly requires the write-path columns `admin_users.last_login_at` and `site_content.published_at`; regression tests verify that readiness returns HTTP 503 when either is missing.
+- **This does not clear the launch blockers.** CI runs against fixtures, not a verified Production D1 export or a live Preview deployment. The production schema/binding gap, Preview secrets, live endpoint checks, admin authentication, and actual Supabase Storage upload/read/delete remain unresolved.
+- Blocker-first route:
+  1. Keep Production untouched; obtain and verify a Production D1 export, then restore it to a disposable database.
+  2. Run the audit and candidate forward migration only on that disposable copy; reconcile every Worker SQL statement, unique conflict target, nullable field, CHECK constraint, index, and data mapping.
+  3. In Preview only, configure the missing server-side secrets through the Cloudflare dashboard, then deploy the feature branch.
+  4. Execute the documented runtime smoke tests against Preview and record evidence in PR #87.
+  5. Only after all prior checks pass, review Production binding/migration rollout and request explicit approval before any Production change or PR merge.
+- No Production database, secret, deployment setting, or PR merge was changed as part of this update.
