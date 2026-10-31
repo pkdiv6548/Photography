@@ -1259,3 +1259,79 @@ test("admin portfolio save validates slug, status, and cover URL for authenticat
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), { error: "unauthorized" });
 });
+
+
+test("media upload rejects unauthenticated requests before parsing or touching storage", async () => {
+  let databaseQueries = 0;
+  let storageContacted = false;
+  const db = {
+    prepare(_query: string) {
+      databaseQueries += 1;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], { type: "image/jpeg" }), "private.jpg");
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+    storageContacted = true;
+    return originalFetch(...args);
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/admin/projects/media/upload", { method: "POST", body: form }),
+      {
+        DB: db,
+        SUPABASE_URL: "https://photography-test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+        SUPABASE_STORAGE_BUCKET: "golden-films-media",
+      } as never,
+    );
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { error: "unauthorized" });
+    assert.equal(databaseQueries, 0, "unauthenticated request should not query D1");
+    assert.equal(storageContacted, false, "unauthenticated request should not contact object storage");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("media upload returns a clear configuration error when server-side storage credentials are absent", async () => {
+  let projectQueryAttempted = false;
+  const db = {
+    prepare(query: string) {
+      if (query.includes("SELECT id, status FROM projects")) projectQueryAttempted = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], { type: "image/jpeg" }), "test.jpg");
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/media/upload", {
+      method: "POST",
+      headers: { Cookie: "__Host-gf_admin=test-session-token" },
+      body: form,
+    }),
+    { DB: db } as never,
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "media_storage_not_configured" });
+  assert.equal(projectQueryAttempted, false, "storage configuration should be checked before project/storage writes");
+});
