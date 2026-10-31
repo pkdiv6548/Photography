@@ -51,7 +51,7 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
   const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
-    status: "ready",
+    status: "blocked",
     schema: "legacy-compatible",
     adminSetupSecretConfigured: false,
     supabaseStorageConfigured: false,
@@ -73,6 +73,7 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
   assert.ok(configuredBody.includes('"adminSetupSecretConfigured":true'));
   assert.ok(configuredBody.includes('"supabaseStorageConfigured":true'));
   assert.ok(configuredBody.includes('"mediaStatus":"ready"'));
+  assert.ok(configuredBody.includes('"status":"ready"'));
   assert.ok(!configuredBody.includes("test-only-admin-setup-secret"), "readiness must never disclose admin setup secret");
   assert.ok(!configuredBody.includes("test-only-service-role-secret"), "readiness must never disclose Supabase service key");
 
