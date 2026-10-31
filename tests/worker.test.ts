@@ -929,3 +929,90 @@ test("media upload rejects an upload that would exceed the shared monthly quota 
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("media upload deletes the uploaded object and releases quota when D1 persistence fails", async () => {
+  let batchCalls = 0;
+  let storageUploaded = false;
+  let storageDeleted = false;
+  let quotaReleased = false;
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          if (query.includes("SELECT id, status FROM projects")) {
+            return { id: "11111111-1111-4111-8111-111111111111", status: "published" } as T;
+          }
+          return null as T | null;
+        },
+        async run() {
+          if (query.includes("UPDATE gf_monthly_media_usage SET used_bytes = MAX(0, used_bytes - ?)")) {
+            quotaReleased = true;
+          }
+          return { success: true, meta: { changes: 1 } };
+        },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    },
+    async batch(_statements: unknown[]) {
+      batchCalls += 1;
+      if (batchCalls === 1) {
+        return [
+          { success: true, meta: { changes: 0 } },
+          { success: true, meta: { changes: 1 } }
+        ];
+      }
+      throw new Error("simulated D1 persistence failure after object upload");
+    }
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set(
+    "file",
+    new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])], { type: "image/jpeg" }),
+    "rollback-test.jpg"
+  );
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+    if (method === "POST") {
+      storageUploaded = true;
+      return new Response(null, { status: 200 });
+    }
+    if (method === "DELETE") {
+      storageDeleted = true;
+      return new Response(null, { status: 200 });
+    }
+    return new Response("unexpected storage method", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/admin/projects/media/upload", {
+        method: "POST",
+        headers: { Cookie: "__Host-gf_admin=test-session-token" },
+        body: form
+      }),
+      {
+        DB: db,
+        SUPABASE_URL: "https://photography-test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+        SUPABASE_STORAGE_BUCKET: "golden-films-media"
+      } as never
+    );
+
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: "media_upload_unavailable" });
+    assert.equal(storageUploaded, true);
+    assert.equal(storageDeleted, true);
+    assert.equal(quotaReleased, true);
+    assert.equal(batchCalls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
