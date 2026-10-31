@@ -831,6 +831,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         schema: "legacy-compatible",
         adminSetupSecretConfigured: Boolean(env.ADMIN_SETUP_SECRET),
         supabaseStorageConfigured,
+        mediaStatus: supabaseStorageConfigured ? "ready" : "blocked",
         adminSetupComplete,
         adminCount,
         blockers,
