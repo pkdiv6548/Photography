@@ -128,3 +128,28 @@ A direct read-only Cloudflare D1 query plus PRAGMA table_info was repeated again
 - The confirmed table-inventory gap remains `site_content`, `site_content_revisions`, and `gf_monthly_media_usage`; other Worker-required columns, indexes, and constraints still need a full contract comparison. Production Pages D1 binding/configuration and secrets also remain separate deployment blockers.
 - The candidate migration is a legacy-schema fixture migration, not a production-ready universal migration. Do not run it against Production. Derive a production-specific migration from a verified export restored to a disposable database, and test the exact script against that baseline.
 - No rows were written and no Production settings were changed during this recheck.
+
+
+## Direct D1 catalog recheck — 2026-10-31 (read-only)
+
+A fresh Cloudflare D1 API query selected `name`, `type`, and `sql` from `sqlite_master` for both the current Preview test database and Production. Both requests returned HTTP 200 with `changed_db: false` and `rows_written: 0`; no data or schema was changed.
+
+### Preview database
+
+- The current Preview catalog contains both `categories.description_en` and `categories.description_hi` in the table definition, each NOT NULL with an empty-string default. This **supersedes the earlier note in this document claiming these two fields were missing from Preview**; that earlier observation is stale.
+- Preview contains `site_content`, `site_content_revisions`, and `gf_monthly_media_usage`.
+- Preview `project_translations` declares primary key `(project_id, language)` and a separate unique index on `(project_id, locale)`. Keep verifying that all Worker conflict targets and nullable/NOT NULL assumptions match; the existence of a unique index does not validate all write paths.
+- Preview contains both `media` and `project_media`; this is not evidence that either table is populated or that Storage operations work.
+
+### Production database
+
+- Production `categories` includes `title_en`, `title_hi`, `description_en`, and `description_hi`.
+- Production `projects` includes the legacy Worker-facing fields `category_slug`, `cover_image_url`, `is_featured`, `project_date`, `location`, and `demo_label`.
+- Production `project_translations` uses `locale` in its primary key and includes `title` and `description`.
+- Production `project_media` includes the expected `preview_url`, `original_key`, `alt_en`, `alt_hi`, `sort_order`, and `is_public` fields.
+- Production `admin_users` has `last_login_at` but no `role`; `enquiries` has `email NOT NULL` and no `consent`; `site_content`, `site_content_revisions`, and `gf_monthly_media_usage` are absent from the catalog.
+- Production and Preview both have tables and indexes with different schema contracts. Neither the catalog listing nor a successful CI fixture is a substitute for executing all Worker SQL paths against a verified disposable restore.
+
+### Operational decision
+
+This is catalog-level evidence only. It does not establish that API routes are active, secrets are configured, the current Preview deployment is healthy at runtime, or Supabase Storage can upload/read/delete objects. Keep PRs #63 and #87 as Draft; do not apply a migration or enable Production API routing until a verified backup has been restored to a disposable D1, the exact migration has been tested against that restore, and Preview smoke tests have passed.
