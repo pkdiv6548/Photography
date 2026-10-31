@@ -115,3 +115,16 @@ The Cloudflare account connection was used to inspect the real D1 metadata and r
 - Attempts to request `/api/health` and `/api/ready` from the connected execution environment were blocked by the outbound request policy (HTTP 403 policy denial). This is not evidence that the website itself returns 403; live endpoint behavior remains unverified.
 - Supabase project `Photography` is ACTIVE_HEALTHY, but its `public` schema has no tables. This is consistent with the application core using Cloudflare D1; Supabase Storage must be verified separately.
 - Next safe steps: inspect the exact schema migration history and existing Production D1 schema with read-only SQL; reconcile the Preview's two missing category fields through an additive Preview-only migration after checking current migrations; then use a permitted real browser/session to test endpoints and Storage. Production remains protected pending backup/export + disposable restore + explicit approval.
+
+
+## Production schema recheck and migration safety correction (2026-10-31)
+
+A direct read-only Cloudflare D1 query plus PRAGMA table_info was repeated against `golden-films-db`. This corrects an over-broad interpretation in the earlier table-inventory note:
+
+- Production `categories` already contains `description_en` and `description_hi` as NOT NULL with empty-string defaults. The candidate forward migration begins by adding these same columns, so **it would fail on Production with duplicate-column errors** and must not be applied there as-is.
+- Production has `project_media` (the table used by the current Worker) and `project_translations` with `(project_id, locale)` as its composite primary key. The absence of tables named `media` and `category_translations` in Production is not by itself a Worker blocker; do not create them merely to match names from a different schema design.
+- Read-only PRAGMA checks confirm Production `projects` includes the Worker fields `category_slug`, `cover_image_url`, `is_featured`, `location`, `project_date`, `demo_label`, and `updated_at`; `project_translations` includes `project_id`, `locale`, `title`, `description`; and `project_media` includes the expected `preview_url`, `original_key`, bilingual alt text, sort order, and `is_public`.
+- Production `enquiries` still has `email TEXT NOT NULL` and no `consent` column. `admin_users` has `last_login_at` but no `role`. `audit_logs.admin_user_id` is nullable and target fields default to empty strings. These are confirmed schema facts from read-only PRAGMA checks.
+- The confirmed table-inventory gap remains `site_content`, `site_content_revisions`, and `gf_monthly_media_usage`; other Worker-required columns, indexes, and constraints still need a full contract comparison. Production Pages D1 binding/configuration and secrets also remain separate deployment blockers.
+- The candidate migration is a legacy-schema fixture migration, not a production-ready universal migration. Do not run it against Production. Derive a production-specific migration from a verified export restored to a disposable database, and test the exact script against that baseline.
+- No rows were written and no Production settings were changed during this recheck.
