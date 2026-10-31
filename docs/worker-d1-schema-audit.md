@@ -101,3 +101,17 @@ These are static contract findings, not evidence that Production currently lacks
   4. Execute the documented runtime smoke tests against Preview and record evidence in PR #87.
   5. Only after all prior checks pass, review Production binding/migration rollout and request explicit approval before any Production change or PR merge.
 - No Production database, secret, deployment setting, or PR merge was changed as part of this update.
+
+
+## Live account inspection (read-only, 2026-10-31)
+
+The Cloudflare account connection was used to inspect the real D1 metadata and run SELECT/PRAGMA-only checks; no database writes were made.
+
+- Preview D1 database `golden-films-preview-test` (`21f470cb-776a-4eb2-816e-16605139299a`) contains the expected Worker tables, including `site_content`, `site_content_revisions`, `gf_monthly_media_usage`, `media`, and `category_translations`.
+- A read-only required-column comparison against the Preview D1 found two missing fields: `categories.description_en` and `categories.description_hi`. The readiness contract should continue to fail closed until these are present or the Worker contract is deliberately reconciled.
+- Production D1 (`golden-films-db`, `0241231b-6e6c-410b-a5ac-958eeb424a78`) is not empty: a read-only `sqlite_master` query returned 13 non-internal tables, including `site_settings`, but not `site_content`, `site_content_revisions`, `gf_monthly_media_usage`, `media`, or `category_translations`. Cloudflare's database metadata reported `num_tables: 0`, which disagrees with the direct read-only query; treat metadata count as unreliable and use SQL inventory as the evidence.
+- Production has a real schema compatibility gap, but no Production migration was attempted. Preview schema is closer to the Worker contract and still has the two missing category description fields.
+- The Cloudflare Pages project API confirms the latest feature-branch Preview deployment of commit `14ab6097de6d2f5e68cd3c07a77f7363a8e08ec5` succeeded. Preview configuration still shows `ADMIN_SETUP_SECRET` empty and no `SUPABASE_SERVICE_ROLE_KEY`. Production has no D1 binding shown in the Pages environment configuration.
+- Attempts to request `/api/health` and `/api/ready` from the connected execution environment were blocked by the outbound request policy (HTTP 403 policy denial). This is not evidence that the website itself returns 403; live endpoint behavior remains unverified.
+- Supabase project `Photography` is ACTIVE_HEALTHY, but its `public` schema has no tables. This is consistent with the application core using Cloudflare D1; Supabase Storage must be verified separately.
+- Next safe steps: inspect the exact schema migration history and existing Production D1 schema with read-only SQL; reconcile the Preview's two missing category fields through an additive Preview-only migration after checking current migrations; then use a permitted real browser/session to test endpoints and Storage. Production remains protected pending backup/export + disposable restore + explicit approval.
