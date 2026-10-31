@@ -794,7 +794,21 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         const actual = new Set((info.results ?? []).map((column) => column.name));
         if (!expected.every((column) => actual.has(column))) throw new Error("incompatible table schema");
       }
-      return json({ status: "ready", schema: "legacy-compatible" });
+      const setup = await env.DB.prepare("SELECT completed_at FROM admin_setup WHERE id = 1").first<{ completed_at: string | null }>();
+      const adminCountRow = await env.DB.prepare("SELECT COUNT(*) AS count FROM admin_users").first<{ count: number }>();
+      const adminCount = Number(adminCountRow?.count ?? 0);
+      const adminSetupComplete = Boolean(setup?.completed_at) || adminCount > 0;
+      const blockers: string[] = [];
+      if (!env.ADMIN_SETUP_SECRET) blockers.push("admin_setup_secret_missing");
+      if (adminSetupComplete) blockers.push("admin_setup_already_completed");
+      return json({
+        status: "ready",
+        schema: "legacy-compatible",
+        adminSetupSecretConfigured: Boolean(env.ADMIN_SETUP_SECRET),
+        adminSetupComplete,
+        adminCount,
+        blockers,
+      });
     } catch {
       return json({ error: "database_schema_incompatible" }, 503);
     }
