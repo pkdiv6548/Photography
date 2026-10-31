@@ -1220,8 +1220,34 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         await env.DB.batch(statements);
         return json({ ok: true, id, previewUrl, mediaType, isPublic, isCover, monthlyLimitBytes: MONTHLY_MEDIA_UPLOAD_LIMIT_BYTES }, 201);
       } catch (error) {
-        if (objectUploaded) await deleteMediaObject(env, key).catch(() => undefined);
-        await releaseMonthlyMediaBytes(env.DB, reservation.monthKey, file.size).catch(() => undefined);
+        let cleanupFailed = false;
+        if (objectUploaded) {
+          try {
+            await deleteMediaObject(env, key);
+          } catch (cleanupError) {
+            cleanupFailed = true;
+            // Keep the quota reservation when cleanup fails: the object may still
+            // exist in Storage, so releasing its bytes would undercount usage.
+            console.error("[media-upload] Storage cleanup failed", JSON.stringify({
+              stage: "compensation_delete",
+              key,
+              errorName: cleanupError instanceof Error ? cleanupError.name : "UnknownError",
+              error: cleanupError instanceof Error ? cleanupError.message.slice(0, 200) : "Unknown error",
+            }));
+          }
+        }
+        if (!cleanupFailed) {
+          try {
+            await releaseMonthlyMediaBytes(env.DB, reservation.monthKey, file.size);
+          } catch (quotaError) {
+            console.error("[media-upload] quota reservation release failed", JSON.stringify({
+              stage: "compensation_quota_release",
+              month: reservation.monthKey,
+              errorName: quotaError instanceof Error ? quotaError.name : "UnknownError",
+            }));
+          }
+        }
+        if (cleanupFailed) return json({ error: "media_upload_cleanup_pending" }, 503);
         throw error;
       }
     } catch {
