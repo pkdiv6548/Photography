@@ -3,7 +3,7 @@
 Review date: 2026-10-31
 Branch: `feat/supabase-storage-free-tier`
 
-Status: **configuration checklist prepared; live configuration remains partially unverified**.
+Status: **read-only configuration check completed; Production is blocked pending operator verification/configuration; live API remains unverified**.
 
 This document is an operator checklist, not authorization to change Production. Never paste secrets into issues, pull requests, source files, logs, or chat.
 
@@ -15,8 +15,8 @@ This document is an operator checklist, not authorization to change Production. 
 | D1 binding `DB` | Bind only the designated preview/test database | Must point to the approved production D1 ID | Inspect binding name and database ID in dashboard; do not run writes |
 | `SUPABASE_URL` | Set the project URL for the test project | Set the approved Supabase project URL | Confirm URL/project identity; never log auth headers |
 | `SUPABASE_STORAGE_BUCKET` | `golden-films-media` or approved test bucket | Confirm intended private bucket exists | Check bucket privacy and exact name |
-| `SUPABASE_SERVICE_ROLE_KEY` | Missing in last recorded review; configure securely before upload integration tests | Not confirmed; configure securely before production upload | Check only presence via dashboard; never print or expose value |
-| `ADMIN_SETUP_SECRET` | Missing in last recorded review; configure securely before initial admin setup | Not confirmed; configure securely before production admin setup | Check only presence; use a strong unique secret stored in secret manager |
+| `SUPABASE_SERVICE_ROLE_KEY` | Not present in the latest Pages project variable-name listing; configure securely before upload integration tests | Not present in the latest Pages project variable-name listing; configure securely before production upload | Check only presence via dashboard; never print or expose value |
+| `ADMIN_SETUP_SECRET` | Variable name is present in the latest Pages project listing; verify its secret value is set and valid before initial admin setup | Not present in the latest Pages project variable-name listing; configure securely before production admin setup | Check only presence; use a strong unique secret stored in secret manager |
 | Admin owner account | Use test-only account | Create only after schema and secret gates pass | Verify role and login using an authorized private session |
 
 ## Preview acceptance gates
@@ -42,13 +42,18 @@ This document is an operator checklist, not authorization to change Production. 
 - [ ] Verify admin authentication, enquiry submission, upload quota, and media visibility using an approved controlled test plan.
 - [ ] Obtain a separate explicit go/no-go approval before any production migration, deployment promotion, or customer-facing write test.
 
-## Known outstanding items from the last recorded review
+## Latest read-only Cloudflare configuration check
 
-- Preview `SUPABASE_SERVICE_ROLE_KEY` was not configured.
-- Preview `ADMIN_SETUP_SECRET` was not configured.
-- Production `DB` binding and the two secrets were not confirmed.
-- Live endpoint checks were blocked by the available outbound request policy; this is not evidence that the endpoints themselves failed.
-- No Production secrets, database migrations, or configuration values were changed by preparing this checklist.
+Checked on 2026-10-31 using the Cloudflare Pages project configuration API for `golden-films`. Only variable names and binding presence were inspected; no secret values or database IDs were read or exposed.
+
+- Production deployment currently points to commit `de77fe22b606ec64b2c5ba290cf7fde21b218120` (deployment created `2026-10-30T12:11:07Z`); the latest feature-branch Preview deployment is a separate deployment and is not Production.
+- Project subdomain is `golden-films.pages.dev`; Cloudflare returned no custom domains for this project.
+- Preview configuration lists a `DB` binding. Production configuration does not list a `DB` binding. This is a confirmed configuration discrepancy; verify the intended production database identity in the dashboard before making any change.
+- `SUPABASE_SERVICE_ROLE_KEY` is absent from the variable-name listing in both environments. Do not run upload integration tests until an authorized operator configures it securely.
+- Preview lists `ADMIN_SETUP_SECRET` by name; Production does not. Presence of a name alone does not prove the secret value is valid.
+- `SUPABASE_URL` and `SUPABASE_STORAGE_BUCKET` names are present in both environments, but the project identity and private bucket settings have not been independently verified.
+- Live `/api/health` and `/api/ready` requests remain unverified because the available outbound request environment could not access the endpoints. This is not evidence that the endpoints themselves failed.
+- No Production secrets, database migrations, bindings, or configuration values were changed during this check.
 
 ## Stop conditions
 
