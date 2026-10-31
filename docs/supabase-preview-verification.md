@@ -75,3 +75,14 @@ Copy this table into the PR comment or a separate test report when running the c
 | Mobile and page-by-page regression | Preview | Layout/navigation/content behave as intended | Not run | Blocked | |
 
 Use **Blocked** rather than **Pass** when a prerequisite such as secrets, D1 binding, migration, or deployment is not ready. Attach sanitized logs or screenshots where useful. Do not include production customer data in test evidence.
+
+
+## Preview owner-setup secret refresh (2026-10-31)
+
+After changing Cloudflare Pages Preview secrets, create a new Preview deployment before testing first-owner setup. Keep the environment selector on **Preview**; do not change Production as part of this check.
+
+1. In Cloudflare Pages, confirm `ADMIN_SETUP_SECRET` is configured as a **Secret** for Preview and `DB` is bound to the disposable Preview D1 database.
+2. Trigger a new deployment from `feat/supabase-storage-free-tier`.
+3. After deployment succeeds, check `GET /api/ready` and inspect the non-sensitive readiness fields, especially `adminSetupSecretConfigured`, `adminSetupComplete`, `adminCount`, and the blocker list.
+4. Open the Preview owner setup page and submit a test only if readiness confirms the secret and database are configured. Never put secret values, passwords, cookies, or tokens in logs, screenshots, or commits.
+5. If the endpoint still returns `admin_setup_not_configured`, investigate deployment/environment binding behavior and Worker routing before retrying setup. Do not change Production or merge a PR as a workaround.
