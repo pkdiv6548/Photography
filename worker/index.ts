@@ -822,10 +822,11 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       const adminCount = Number(adminCountRow?.count ?? 0);
       const adminSetupComplete = Boolean(setup?.completed_at) || adminCount > 0;
       const blockers: string[] = [];
+      const notices: string[] = [];
       const supabaseStorageConfigured = isSupabaseStorageConfigured(env);
-      if (!env.ADMIN_SETUP_SECRET) blockers.push("admin_setup_secret_missing");
+      if (!adminSetupComplete && !env.ADMIN_SETUP_SECRET) blockers.push("admin_setup_secret_missing");
       if (!supabaseStorageConfigured) blockers.push("supabase_storage_not_configured");
-      if (adminSetupComplete) blockers.push("admin_setup_already_completed");
+      if (adminSetupComplete) notices.push("admin_setup_already_completed");
       return json({
         status: blockers.length === 0 ? "ready" : "blocked",
         schema: "legacy-compatible",
@@ -835,6 +836,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         adminSetupComplete,
         adminCount,
         blockers,
+        notices,
       });
     } catch {
       return json({ error: "database_schema_incompatible" }, 503);
