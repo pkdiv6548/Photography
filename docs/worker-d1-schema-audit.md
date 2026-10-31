@@ -172,3 +172,11 @@ This is catalog-level evidence only. It does not establish that API routes are a
 - Cloudflare Pages reports successful Preview deployment for the same commit at https://12d5263c.golden-films.pages.dev (branch `feat/supabase-storage-free-tier`).
 - The known rollout blockers are unchanged: Preview-only `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_SETUP_SECRET` must be configured securely; API health/readiness and real upload/read/delete smoke tests remain unverified; Production D1 schema mismatches and the lack of a verified restore-test are unresolved.
 - No Production database, Production secret, or Production deployment was modified as part of this follow-up. Keep PRs #63 and #87 Draft until the explicit safety gates pass.
+
+
+## Latest deployment confirmation — 2026-10-31
+
+- Cloudflare Pages deployment `e84119fa-db22-4d15-81bf-c373f7fb939d` for commit `87d51c2de52efea05d371cf934096cb5b509dda5` completed all stages, including build and deploy, with status `success`. Preview URL: https://e84119fa.golden-films.pages.dev.
+- GitHub Actions run [#413](https://github.com/pkdiv6548/Photography/actions/runs/41199062706) completed with conclusion `success` for the same commit.
+- Attempts to open the Preview homepage and `/api/health` and `/api/ready` via the available web verification path returned inaccessible/internal-error results. Therefore this tool session has not established runtime endpoint health; this is not proof that the endpoints are down.
+- No Production configuration, secrets, deployment, or D1 data were changed. Keep the rollout gates in force: configure Preview-only secrets securely, verify endpoints and real Storage workflows from a permitted browser/network, and validate migration against a disposable restore of a verified Production backup before any rollout.
