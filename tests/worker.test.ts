@@ -65,6 +65,7 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
     adminSetupComplete: false,
     adminCount: 0,
     blockers: ["admin_setup_secret_missing", "supabase_storage_not_configured"],
+    notices: [],
   });
 
   const configuredResponse = await worker.fetch(new Request("https://example.test/api/ready"), {
