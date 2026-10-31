@@ -1137,7 +1137,7 @@ test("admin session endpoint rejects requests without a valid session cookie", a
     },
   };
   const response = await worker.fetch(
-    new Request("https://example.test/api/admin/session", { method: "GET" }),
+    new Request("https://example.test/api/admin/session", { method: "GET", headers: { Cookie: "__Host-gf_admin=invalid-session-token" } }),
     { DB: db },
   );
   assert.equal(response.status, 401);
