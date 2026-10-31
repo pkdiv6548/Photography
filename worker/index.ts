@@ -888,8 +888,13 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       budgetRange: cleanText(body.budgetRange, 60),
       message: cleanText(body.message, 3000),
     };
+    // Keep this allowlist aligned with the real service IDs emitted by CustomerPages.tsx.
     const allowedServices = new Set([
-      "photography", "videography", "photo-editing", "video-editing"
+      "photography", "videography", "photo-editing", "video-editing",
+      "wedding", "pre-wedding", "candid", "maternity", "baby-kids", "event",
+      "fashion", "product", "commercial",
+      "wedding-films", "pre-wedding-films", "cinematic", "event-films", "drone",
+      "corporate", "music-video", "documentary", "ad-films"
     ]);
     const consent = body.consent === true;
     const phoneValue = input.phone ?? "";
