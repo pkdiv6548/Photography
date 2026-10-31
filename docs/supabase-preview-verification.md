@@ -16,7 +16,7 @@ If the dashboard does not offer the Secret type, stop and resolve account permis
 
 ## Current prerequisite status
 
-**Latest confirmed automated verification (2026-10-31):** GitHub Actions run [#370](https://github.com/pkdiv6548/Photography/actions/runs/41147511250) (`Golden Films checks`) completed with conclusion `success` for head commit `633c04873105c6e37693e54859319cdb8c44f548`. The workflow's typecheck, Worker API regression tests, forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend build passed. Cloudflare Pages Preview deployment for this same commit also reports `success` and uses the branch alias `https://feat-supabase-storage-free-t.golden-films.pages.dev`. This is build/deployment evidence only; it does not confirm live API readiness, browser behavior, real Supabase Storage operations, or Production schema compatibility.
+**Latest confirmed automated verification (2026-10-31):** GitHub Actions run [#411](https://github.com/pkdiv6548/Photography/actions/runs/41198907782) (`Golden Films checks`) completed with conclusion `success` for documentation commit `a514e55d8fc2661ce24cc364456f9a49a0435b87`. The workflow's typecheck, Worker API regression tests (including the Storage-upload-failure quota-release test), forward-migration SQLite fixture, fresh-schema Worker contract fixture, and frontend production build passed. Cloudflare Pages Preview deployment for the same commit also reports `success`: https://49a7100b.golden-films.pages.dev. This is build/deployment evidence only; it does not confirm live API readiness, browser behavior, real Supabase Storage operations, or Production schema compatibility.
 
 **Configuration and read-only D1 schema audit (Cloudflare API, 2026-10-30):**
 
