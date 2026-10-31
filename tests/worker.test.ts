@@ -1416,7 +1416,7 @@ test("monthly upload quota uses an atomic conditional D1 reservation before stor
     prepare(query: string) {
       let values: unknown[] = [];
       return {
-        bind(...args: unknown[]) { values = args; return this; },
+        bind(...args: unknown[]) { values = args; this.values = args; return this; },
         async first<T>() {
           if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
             return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
