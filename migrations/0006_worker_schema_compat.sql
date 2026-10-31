@@ -52,11 +52,12 @@ CREATE TABLE IF NOT EXISTS project_media (
   alt_en TEXT NOT NULL DEFAULT '',
   alt_hi TEXT NOT NULL DEFAULT '',
   sort_order INTEGER NOT NULL DEFAULT 0,
-  is_public INTEGER NOT NULL DEFAULT 1 CHECK (is_public IN (0, 1))
+  is_public INTEGER NOT NULL DEFAULT 1 CHECK (is_public IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 INSERT OR IGNORE INTO project_media
-  (id, project_id, media_type, preview_url, original_key, alt_en, alt_hi, sort_order, is_public)
+  (id, project_id, media_type, preview_url, original_key, alt_en, alt_hi, sort_order, is_public, created_at)
 SELECT
   m.id,
   m.project_id,
@@ -66,7 +67,8 @@ SELECT
   COALESCE((SELECT pt.alt_text FROM project_translations pt WHERE pt.project_id = m.project_id AND pt.language = 'en'), ''),
   COALESCE((SELECT pt.alt_text FROM project_translations pt WHERE pt.project_id = m.project_id AND pt.language = 'hi'), ''),
   m.sort_order,
-  m.is_public_preview
+  m.is_public_preview,
+  m.created_at
 FROM media m;
 
 CREATE INDEX IF NOT EXISTS idx_project_media_project_order
