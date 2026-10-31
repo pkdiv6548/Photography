@@ -161,3 +161,11 @@ Reviewed `src/App.tsx` and `src/data.ts` only; this is not a device/browser visu
 - [ ] Preview Storage is still blocked by the previously observed `supabaseStorageConfigured: false`; do not request or change the service-role key while its setup remains on hold.
 - [ ] Mobile checks remain source-only. Actual 320/360/390px visual checks and form/navigation regression are pending.
 - [ ] Keep PR #87 and PR #63 unmerged. No Production D1, secrets, schema, or live Storage writes were changed for this checkpoint.
+
+
+## Media compensation safety fix (2026-10-31, commit b773389)
+
+- [x] Updated the upload compensation path so a failed Supabase Storage delete is no longer silently ignored. It logs a bounded diagnostic containing the media key and error class/message, returns `503 media_upload_cleanup_pending`, and **keeps the monthly quota reservation** while the uploaded object may still exist. This avoids undercounting an orphaned Storage object.
+- [x] When Storage cleanup succeeds (or the upload never created an object), the handler still attempts to release the reserved quota. A quota-release failure is now logged for operator follow-up instead of being silently swallowed.
+- [ ] CI/typecheck and regression tests for this code change are pending. Do not mark this fix fully verified until the commit checks pass and an injected cleanup-failure test covers the branch.
+- [ ] This source-level fix does not add a dedicated delete endpoint and does not unblock real Storage checks; Preview Storage configuration remains on hold.
