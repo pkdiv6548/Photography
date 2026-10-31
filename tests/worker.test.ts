@@ -34,11 +34,17 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
     site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "changed_by", "created_at"],
     gf_monthly_media_usage: ["month_key", "used_bytes", "updated_at"],
   };
+  let adminSetupCompletedAt: string | null = null;
+  let existingAdminCount = 0;
   const db = {
     prepare(query: string) {
       return {
         bind(..._args: unknown[]) { return this; },
-        async first<T>() { return null as T | null; },
+        async first<T>() {
+          if (query.includes("SELECT completed_at FROM admin_setup")) return { completed_at: adminSetupCompletedAt } as T;
+          if (query.includes("SELECT COUNT(*) AS count FROM admin_users")) return { count: existingAdminCount } as T;
+          return null as T | null;
+        },
         async run() { return { success: true, meta: { changes: 0 } }; },
         async all<T>() {
           const match = query.match(/PRAGMA table_info\(([^)]+)\)/);
@@ -76,6 +82,27 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
   assert.ok(configuredBody.includes('"status":"ready"'));
   assert.ok(!configuredBody.includes("test-only-admin-setup-secret"), "readiness must never disclose admin setup secret");
   assert.ok(!configuredBody.includes("test-only-service-role-secret"), "readiness must never disclose Supabase service key");
+
+  // Once an admin exists, first-time setup configuration is no longer a readiness blocker.
+  adminSetupCompletedAt = "2026-10-31T00:00:00Z";
+  existingAdminCount = 1;
+  const initializedResponse = await worker.fetch(new Request("https://example.test/api/ready"), {
+    DB: db,
+    SUPABASE_URL: "https://project.example.test",
+    SUPABASE_SERVICE_ROLE_KEY: "test-only-service-role-secret",
+    SUPABASE_STORAGE_BUCKET: "golden-films-media",
+  });
+  assert.equal(initializedResponse.status, 200);
+  const initializedBody = await initializedResponse.json() as {
+    status: string;
+    adminSetupComplete: boolean;
+    blockers: string[];
+    notices: string[];
+  };
+  assert.equal(initializedBody.status, "ready");
+  assert.equal(initializedBody.adminSetupComplete, true);
+  assert.deepEqual(initializedBody.blockers, []);
+  assert.deepEqual(initializedBody.notices, ["admin_setup_already_completed"]);
 
   // The login handler updates this column; readiness must reject a schema that lacks it.
   schema.admin_users = schema.admin_users.filter(name => name !== "last_login_at");
