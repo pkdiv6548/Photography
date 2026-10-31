@@ -1097,3 +1097,74 @@ test("media upload releases the reserved monthly quota when Supabase rejects the
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("admin setup fails closed when the setup secret is not configured", async () => {
+  const db = {
+    prepare(_query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "owner@example.test", password: "a-long-test-password-123" }),
+    }),
+    { DB: db },
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "admin_setup_not_configured" });
+  assert.equal(response.headers.get("set-cookie"), null, "setup must not create a session without configured setup authorization");
+});
+
+test("admin session endpoint rejects requests without a valid session cookie", async () => {
+  let query = "";
+  const db = {
+    prepare(sql: string) {
+      query = sql;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/session", { method: "GET" }),
+    { DB: db },
+  );
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { authenticated: false });
+  assert.match(query, /admin_sessions/);
+  assert.match(query, /expires_at > datetime\('now'\)/);
+});
+
+test("admin logout rejects unauthenticated requests without clearing a session cookie", async () => {
+  const db = {
+    prepare(_query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/logout", {
+      method: "POST",
+      headers: { Cookie: "__Host-gf_admin=invalid-session-token" },
+    }),
+    { DB: db },
+  );
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+  assert.equal(response.headers.get("set-cookie"), null);
+});
