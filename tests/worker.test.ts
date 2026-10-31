@@ -50,7 +50,7 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
   };
   const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "ready", schema: "legacy-compatible" });
+  assert.deepEqual(await response.json(), { status: "ready", schema: "legacy-compatible", adminSetupSecretConfigured: false, adminSetupComplete: false, adminCount: 0, blockers: ["admin_setup_secret_missing"] });
 
   // The login handler updates this column; readiness must reject a schema that lacks it.
   schema.admin_users = schema.admin_users.filter(name => name !== "last_login_at");
