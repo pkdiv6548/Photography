@@ -163,3 +163,12 @@ This is catalog-level evidence only. It does not establish that API routes are a
 - The current Preview project configuration reports a D1 binding and Supabase URL/bucket name, but the service-role key is not present in the reported Preview environment configuration and `ADMIN_SETUP_SECRET` has no configured value. Do not expose or paste secrets into chat or source control.
 - The runtime probe from the available verification environment is blocked by outbound-request policy, so health/readiness and browser workflows remain unverified here.
 - PR #87 remains open and Draft. No Production migration, secret change, or production deployment was performed. Continue to require a verified backup restored to disposable D1, exact migration testing against that restore, configured Preview-only secrets, and permitted runtime smoke tests before considering rollout.
+
+
+## Verification follow-up — documentation commit and latest Preview — 2026-10-31
+
+- The verification runbook was refreshed in commit `b82c41f49bc4c68b43cf1fd515a4dd823cbe8db4` to point at the latest confirmed CI result and deployment evidence.
+- GitHub Actions run [#412](https://github.com/pkdiv6548/Photography/actions/runs/41198981477) completed successfully for that commit. The configured checks passed; this is automated fixture/build evidence, not live API or storage evidence.
+- Cloudflare Pages reports successful Preview deployment for the same commit at https://12d5263c.golden-films.pages.dev (branch `feat/supabase-storage-free-tier`).
+- The known rollout blockers are unchanged: Preview-only `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_SETUP_SECRET` must be configured securely; API health/readiness and real upload/read/delete smoke tests remain unverified; Production D1 schema mismatches and the lack of a verified restore-test are unresolved.
+- No Production database, Production secret, or Production deployment was modified as part of this follow-up. Keep PRs #63 and #87 Draft until the explicit safety gates pass.
