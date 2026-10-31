@@ -402,8 +402,13 @@ test("projects endpoint binds category slug and limit and returns published-proj
   });
 });
 
-test("enquiry form service values pass validation and fail closed when D1 is absent", async () => {
-  for (const service of ["photography", "videography", "photo-editing", "video-editing"]) {
+test("all website photography and videography service IDs pass enquiry validation and fail closed when D1 is absent", async () => {
+  const websiteServices = [
+    "photography", "videography", "photo-editing", "video-editing",
+    "wedding", "pre-wedding", "candid", "maternity", "baby-kids", "event", "fashion", "product", "commercial",
+    "wedding-films", "pre-wedding-films", "cinematic", "event-films", "drone", "corporate", "music-video", "documentary", "ad-films"
+  ];
+  for (const service of websiteServices) {
     const response = await worker.fetch(
       new Request("https://example.test/api/enquiries", {
         method: "POST",
