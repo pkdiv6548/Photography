@@ -95,3 +95,11 @@ After changing Cloudflare Pages Preview secrets, create a new Preview deployment
 - Earlier commit `e0d14f08e36044928a4fab8cd874b3c475007998` only changed three media-test descriptions to name Supabase Storage rather than R2; it did not change test logic or runtime behavior.
 - CI success is not live verification. The latest Preview deployment status, Preview secrets/readiness, real Supabase upload/read/delete flows, and Production schema compatibility are still unverified or blocked.
 - Keep PR #87 in Draft and PR #63 in Draft. Do not merge or change Production until a verified Production D1 backup has been restored to a disposable database, the complete Worker SQL/schema contract has passed against that restore, Preview secrets are configured in the Preview environment, and end-to-end Preview smoke tests pass.
+
+
+## User-provided Preview readiness evidence (2026-10-31)
+
+- A user-provided mobile-browser screenshot of the Preview `/api/ready` response shows: `status: blocked`, `schema: legacy-compatible`, `adminSetupSecretConfigured: true`, `supabaseStorageConfigured: false`, `mediaStatus: blocked`, `adminSetupComplete: true`, `adminCount: 1`, blocker `supabase_storage_not_configured`, and notice `admin_setup_already_completed`.
+- This is direct evidence that the currently viewed Preview deployment reports owner setup complete but media readiness blocked by Supabase Storage configuration. Do not repeat admin setup.
+- The screenshot does not expose secret values and does not prove actual upload/read/delete behavior. Storage end-to-end checks remain blocked. The user has explicitly put service-role-key setup on hold; do not request or change it until the user resumes that work.
+- Next safe action while that hold remains: preserve this readiness evidence and continue only with non-secret, read-only review/documentation. Do not merge PR #87 or change Production.
