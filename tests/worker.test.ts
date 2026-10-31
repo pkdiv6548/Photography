@@ -1335,3 +1335,75 @@ test("media upload returns a clear configuration error when server-side storage 
   assert.deepEqual(await response.json(), { error: "media_storage_not_configured" });
   assert.equal(projectQueryAttempted, false, "storage configuration should be checked before project/storage writes");
 });
+
+
+test("media hide requires owner role before querying or mutating media", async () => {
+  let mediaQueryAttempted = false;
+  let mutationAttempted = false;
+  const db = {
+    prepare(query: string) {
+      if (query.includes("SELECT m.preview_url, p.cover_image_url")) mediaQueryAttempted = true;
+      if (query.includes("UPDATE project_media SET is_public")) mutationAttempted = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "editor-id", email: "editor@example.test", role: "editor" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 1 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/media/hide", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: "__Host-gf_admin=editor-session-token",
+      },
+      body: JSON.stringify({ id: "media-123" }),
+    }),
+    { DB: db } as never,
+  );
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: "forbidden" });
+  assert.equal(mediaQueryAttempted, false, "editor must be rejected before reading media metadata");
+  assert.equal(mutationAttempted, false, "editor must not be able to hide media");
+});
+
+test("media replace requires authentication before reading or updating media", async () => {
+  let mediaQueryAttempted = false;
+  let mutationAttempted = false;
+  const db = {
+    prepare(query: string) {
+      if (query.includes("JOIN projects p ON p.id = m.project_id")) mediaQueryAttempted = true;
+      if (query.includes("UPDATE project_media SET preview_url")) mutationAttempted = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 1 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/media/replace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: "media-123",
+        previewUrl: "https://cdn.example.test/replacement.jpg",
+        altEn: "Replacement",
+        altHi: "प्रतिस्थापन",
+      }),
+    }),
+    { DB: db } as never,
+  );
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+  assert.equal(mediaQueryAttempted, false);
+  assert.equal(mutationAttempted, false);
+});
