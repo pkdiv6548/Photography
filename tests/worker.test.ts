@@ -1474,3 +1474,92 @@ test("monthly upload quota uses an atomic conditional D1 reservation before stor
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("enquiry endpoint rejects missing consent and invalid service before database access", async () => {
+  let databaseContacted = false;
+  const db = {
+    prepare(_query: string) {
+      databaseContacted = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const cases = [
+    {
+      name: "missing consent",
+      body: {
+        name: "Sample Visitor",
+        email: "visitor@example.test",
+        service: "photography",
+        message: "Please contact me about a photography booking.",
+      },
+    },
+    {
+      name: "unknown service",
+      body: {
+        name: "Sample Visitor",
+        email: "visitor@example.test",
+        service: "made-up-service",
+        message: "Please contact me about a photography booking.",
+        consent: true,
+      },
+    },
+    {
+      name: "impossible calendar date",
+      body: {
+        name: "Sample Visitor",
+        email: "visitor@example.test",
+        service: "photography",
+        eventDate: "2026-02-30",
+        message: "Please contact me about a photography booking.",
+        consent: true,
+      },
+    },
+  ];
+  for (const item of cases) {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/v1/enquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item.body),
+      }),
+      { DB: db },
+    );
+    assert.equal(response.status, 400, item.name);
+    assert.deepEqual(await response.json(), { error: "validation_failed" }, item.name);
+  }
+  assert.equal(databaseContacted, false, "invalid enquiry payloads must be rejected before D1 access");
+});
+
+test("enquiry honeypot quietly accepts spam without database writes", async () => {
+  let databaseContacted = false;
+  const db = {
+    prepare(_query: string) {
+      databaseContacted = true;
+      throw new Error("honeypot must short-circuit before database access");
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Spam Bot",
+        email: "bot@example.test",
+        service: "photography",
+        message: "This is spam content that should be ignored.",
+        consent: true,
+        website: "https://spam.example",
+      }),
+    }),
+    { DB: db },
+  );
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), { ok: true, message: "Enquiry received." });
+  assert.equal(databaseContacted, false);
+});
