@@ -126,3 +126,15 @@ These findings do not change the Preview readiness state: live Supabase Storage 
 - [ ] The user-facing Preview readiness evidence still reports Storage unconfigured. Keep live Storage tests blocked while service-role-key setup is on hold.
 - [ ] Next safe engineering step: add isolated regression coverage for upload compensation and cleanup failure without touching Production D1, deployment secrets, or live Storage.
 - [ ] Keep PR #87 and PR #63 unmerged; do not perform Production migrations or deployment changes under this checkpoint.
+
+
+## Source-level mobile and content regression review (2026-10-31)
+
+Reviewed `src/App.tsx` and `src/data.ts` only; this is not a device/browser visual test.
+
+- [x] Navigation includes a mobile menu toggle with an accessible label and `aria-expanded`; selecting a navigation item closes the menu.
+- [x] English/Hindi language controls expose pressed state via `aria-pressed`, and portfolio category labels and image alt text have both language variants.
+- [x] Demo portfolio content is explicitly labeled as sample/demo content in the homepage copy and image alt text; it should not be represented as Sunil's real client work.
+- [x] Enquiry submission checks HTTP success, JSON content type, and an explicit `ok: true` response before showing success; failure has a separate status message.
+- [ ] Still requires real mobile-browser checks: 320px/360px/390px widths, menu open/close and keyboard focus, Hindi text wrapping, image loading, form validation/consent, submit success/error states, and direct navigation to each route.
+- [ ] This source review does not establish that the preview deployment is current or that mobile layout has no overflow. Do not mark task 19 complete until browser/device verification is actually performed.
