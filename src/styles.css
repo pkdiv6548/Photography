@@ -419,3 +419,37 @@ img { display: block; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .gf-auth-layout *, .gf-account-layout * { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Selected package summary on the booking page */
+.gf-booking-package {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 22px;
+  padding: 18px;
+  border: 1px solid rgba(217, 173, 99, .42);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(217, 173, 99, .12), rgba(255, 255, 255, .025));
+}
+.gf-booking-package > span {
+  color: var(--gf-gold, var(--gold));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .16em;
+}
+.gf-booking-package > strong {
+  color: var(--text, #f4f0e8);
+  font-family: var(--serif, Georgia, serif);
+  font-size: clamp(19px, 2vw, 25px);
+  font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.gf-booking-package > a {
+  width: fit-content;
+  color: var(--gold-bright, #f4cf8b);
+  font-size: 12px;
+  text-decoration: underline;
+  text-decoration-color: rgba(244, 207, 139, .45);
+  text-underline-offset: 4px;
+}
+.gf-booking-package > a:hover { text-decoration-color: currentColor; }
