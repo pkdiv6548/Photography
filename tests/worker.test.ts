@@ -1407,3 +1407,70 @@ test("media replace requires authentication before reading or updating media", a
   assert.equal(mediaQueryAttempted, false);
   assert.equal(mutationAttempted, false);
 });
+
+
+test("monthly upload quota uses an atomic conditional D1 reservation before storage upload", async () => {
+  const batchQueries: Array<{ query: string; values: unknown[] }> = [];
+  let storageContacted = false;
+  const db = {
+    prepare(query: string) {
+      let values: unknown[] = [];
+      return {
+        bind(...args: unknown[]) { values = args; return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          if (query.includes("SELECT id, status FROM projects")) {
+            return { id: "11111111-1111-4111-8111-111111111111", status: "draft" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 1 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+        query,
+        values,
+      };
+    },
+    async batch(statements: Array<{ query: string; values: unknown[] }>) {
+      for (const statement of statements) batchQueries.push(statement);
+      return [
+        { success: true, meta: { changes: 0 } },
+        { success: true, meta: { changes: 0 } },
+      ];
+    },
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])], { type: "image/jpeg" }), "quota-boundary.jpg");
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+    storageContacted = true;
+    return originalFetch(...args);
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/admin/projects/media/upload", {
+        method: "POST",
+        headers: { Cookie: "__Host-gf_admin=test-session-token" },
+        body: form,
+      }),
+      {
+        DB: db,
+        SUPABASE_URL: "https://photography-test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+        SUPABASE_STORAGE_BUCKET: "golden-films-media",
+      } as never,
+    );
+    assert.equal(response.status, 413);
+    assert.deepEqual((await response.json() as { error: string }).error, "monthly_upload_quota_exceeded");
+    assert.equal(batchQueries.length, 2, "quota row creation and conditional reservation should be batched");
+    assert.match(batchQueries[1].query, /used_bytes = used_bytes \+ \?/);
+    assert.match(batchQueries[1].query, /used_bytes \+ \? <= \?/);
+    assert.equal(batchQueries[1].values[0], 8, "reservation must account for actual file bytes");
+    assert.equal(batchQueries[1].values[1], new Date().toISOString().slice(0, 7), "quota key must use UTC calendar month");
+    assert.equal(storageContacted, false, "storage must not be contacted if the atomic reservation fails");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
