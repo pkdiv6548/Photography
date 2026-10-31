@@ -55,6 +55,7 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
     schema: "legacy-compatible",
     adminSetupSecretConfigured: false,
     supabaseStorageConfigured: false,
+    mediaStatus: "blocked",
     adminSetupComplete: false,
     adminCount: 0,
     blockers: ["admin_setup_secret_missing", "supabase_storage_not_configured"],
@@ -71,6 +72,7 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
   const configuredBody = await configuredResponse.text();
   assert.ok(configuredBody.includes('"adminSetupSecretConfigured":true'));
   assert.ok(configuredBody.includes('"supabaseStorageConfigured":true'));
+  assert.ok(configuredBody.includes('"mediaStatus":"ready"'));
   assert.ok(!configuredBody.includes("test-only-admin-setup-secret"), "readiness must never disclose admin setup secret");
   assert.ok(!configuredBody.includes("test-only-service-role-secret"), "readiness must never disclose Supabase service key");
 
