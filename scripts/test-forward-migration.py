@@ -215,7 +215,7 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
         self.assertEqual(category_columns["description_en"]["notnull"], 1)
         self.assertEqual(category_columns["description_hi"]["notnull"], 1)
         self.assertEqual(
-            self.db.execute("SELECT description_en, description_hi FROM categories WHERE id='wedding-id'").fetchone(),
+            tuple(self.db.execute("SELECT description_en, description_hi FROM categories WHERE id='wedding-id'").fetchone()),
             ("", ""),
             "existing categories must receive safe empty-string defaults for new description columns",
         )
