@@ -5,6 +5,8 @@
 
 ALTER TABLE categories ADD COLUMN title_en TEXT;
 ALTER TABLE categories ADD COLUMN title_hi TEXT;
+ALTER TABLE categories ADD COLUMN description_en TEXT NOT NULL DEFAULT '';
+ALTER TABLE categories ADD COLUMN description_hi TEXT NOT NULL DEFAULT '';
 
 UPDATE categories
 SET title_en = (
