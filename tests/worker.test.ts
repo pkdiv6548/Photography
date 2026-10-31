@@ -1563,3 +1563,44 @@ test("enquiry honeypot quietly accepts spam without database writes", async () =
   assert.deepEqual(await response.json(), { ok: true, message: "Enquiry received." });
   assert.equal(databaseContacted, false);
 });
+
+
+test("CMS draft and revision endpoints require an authenticated admin", async () => {
+  let databaseWrites = 0;
+  const db = {
+    prepare(_query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { databaseWrites++; return { success: true, meta: { changes: 1 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  for (const url of [
+    "https://example.test/api/admin/content",
+    "https://example.test/api/admin/content/revisions?page=home",
+  ]) {
+    const response = await worker.fetch(new Request(url), { DB: db });
+    assert.equal(response.status, 401, url);
+    assert.deepEqual(await response.json(), { error: "unauthorized" }, url);
+  }
+  assert.equal(databaseWrites, 0, "unauthenticated CMS requests must not write to D1");
+});
+
+test("public CMS endpoint rejects unknown page slugs before database access", async () => {
+  let databaseContacted = false;
+  const db = {
+    prepare(_query: string) {
+      databaseContacted = true;
+      throw new Error("invalid page must be rejected before database access");
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/content?page=unknown-page"),
+    { DB: db },
+  );
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "invalid_page" });
+  assert.equal(databaseContacted, false);
+});
