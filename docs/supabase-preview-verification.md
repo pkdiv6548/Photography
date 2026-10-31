@@ -116,3 +116,13 @@ Reviewed `worker/index.ts` and `tests/admin-media.test.ts` on branch `feat/supab
 - [ ] Add regression tests for: Storage object upload failure releases quota; D1 batch failure attempts object cleanup and releases quota; cleanup failure is surfaced/recorded; hide does not accidentally expose media; and any future delete operation refuses to remove the current cover until it is replaced.
 
 These findings do not change the Preview readiness state: live Supabase Storage remains blocked by the user's explicit service-role-key hold. Do not request the key, change secrets, merge PRs, or modify Production as part of this review.
+
+
+## Follow-up verification checkpoint (2026-10-31, commit b98f741)
+
+- [x] GitHub Actions run [#458](https://github.com/pkdiv6548/Photography/actions/runs/41219197935) passed for commit `b98f741c441a66d49d4a67710d0a300099e362e2`.
+- [x] The run passed frontend/Worker typecheck, Worker API regression tests, forward-migration SQLite fixture test, fresh-schema Worker contract fixture test, and frontend production build.
+- [ ] These automated checks do not cover injected Supabase Storage cleanup failures or prove real object upload/read/delete behavior. The media lifecycle risks above remain open.
+- [ ] The user-facing Preview readiness evidence still reports Storage unconfigured. Keep live Storage tests blocked while service-role-key setup is on hold.
+- [ ] Next safe engineering step: add isolated regression coverage for upload compensation and cleanup failure without touching Production D1, deployment secrets, or live Storage.
+- [ ] Keep PR #87 and PR #63 unmerged; do not perform Production migrations or deployment changes under this checkpoint.
