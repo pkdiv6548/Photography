@@ -785,8 +785,8 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
         admin_setup: ["id", "completed_at"],
         auth_rate_limits: ["rate_key", "window_started_at", "request_count"],
         audit_logs: ["id", "admin_user_id", "action", "target_type", "target_id", "created_at"],
-        site_content: ["page_slug", "draft_json", "published_json", "status", "updated_at"],
-        site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "created_at"],
+        site_content: ["page_slug", "draft_json", "published_json", "status", "updated_by", "updated_at", "published_at"],
+        site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "changed_by", "created_at"],
         gf_monthly_media_usage: ["month_key", "used_bytes", "updated_at"],
       };
       for (const [table, expected] of Object.entries(required)) {
