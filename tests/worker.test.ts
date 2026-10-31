@@ -19,25 +19,32 @@ test("readiness endpoint fails closed when D1 is not configured", async () => {
 
 test("readiness endpoint accepts the required legacy-compatible schema", async () => {
   const schema: Record<string, string[]> = {
-    categories: ["id", "slug", "sort_order", "title_en", "title_hi"],
-    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at", "demo_label"],
+    categories: ["id", "slug", "sort_order", "title_en", "title_hi", "description_en", "description_hi"],
+    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "location", "project_date", "updated_at", "demo_label"],
     project_translations: ["project_id", "locale", "title", "description"],
     project_media: ["id", "project_id", "media_type", "preview_url", "original_key", "alt_en", "alt_hi", "sort_order", "is_public"],
     enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
     enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
-    admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
+    admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active", "last_login_at"],
     admin_sessions: ["id", "admin_user_id", "token_hash", "expires_at"],
     admin_setup: ["id", "completed_at"],
     auth_rate_limits: ["rate_key", "window_started_at", "request_count"],
     audit_logs: ["id", "admin_user_id", "action", "target_type", "target_id", "created_at"],
-    site_content: ["page_slug", "draft_json", "published_json", "status", "updated_at"],
-    site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "created_at"],
+    site_content: ["page_slug", "draft_json", "published_json", "status", "updated_by", "updated_at", "published_at"],
+    site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "changed_by", "created_at"],
+    gf_monthly_media_usage: ["month_key", "used_bytes", "updated_at"],
   };
+  let adminSetupCompletedAt: string | null = null;
+  let existingAdminCount = 0;
   const db = {
     prepare(query: string) {
       return {
         bind(..._args: unknown[]) { return this; },
-        async first<T>() { return null as T | null; },
+        async first<T>() {
+          if (query.includes("SELECT completed_at FROM admin_setup")) return { completed_at: adminSetupCompletedAt } as T;
+          if (query.includes("SELECT COUNT(*) AS count FROM admin_users")) return { count: existingAdminCount } as T;
+          return null as T | null;
+        },
         async run() { return { success: true, meta: { changes: 0 } }; },
         async all<T>() {
           const match = query.match(/PRAGMA table_info\(([^)]+)\)/);
@@ -49,24 +56,84 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
   };
   const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "ready", schema: "legacy-compatible" });
+  assert.deepEqual(await response.json(), {
+    status: "blocked",
+    schema: "legacy-compatible",
+    adminSetupSecretConfigured: false,
+    supabaseStorageConfigured: false,
+    mediaStatus: "blocked",
+    adminSetupComplete: false,
+    adminCount: 0,
+    blockers: ["admin_setup_secret_missing", "supabase_storage_not_configured"],
+    notices: [],
+  });
+
+  const configuredResponse = await worker.fetch(new Request("https://example.test/api/ready"), {
+    DB: db,
+    ADMIN_SETUP_SECRET: "test-only-admin-setup-secret",
+    SUPABASE_URL: "https://project.example.test",
+    SUPABASE_SERVICE_ROLE_KEY: "test-only-service-role-secret",
+    SUPABASE_STORAGE_BUCKET: "golden-films-media",
+  });
+  assert.equal(configuredResponse.status, 200);
+  const configuredBody = await configuredResponse.text();
+  assert.ok(configuredBody.includes('"adminSetupSecretConfigured":true'));
+  assert.ok(configuredBody.includes('"supabaseStorageConfigured":true'));
+  assert.ok(configuredBody.includes('"mediaStatus":"ready"'));
+  assert.ok(configuredBody.includes('"status":"ready"'));
+  assert.ok(!configuredBody.includes("test-only-admin-setup-secret"), "readiness must never disclose admin setup secret");
+  assert.ok(!configuredBody.includes("test-only-service-role-secret"), "readiness must never disclose Supabase service key");
+
+  // Once an admin exists, first-time setup configuration is no longer a readiness blocker.
+  adminSetupCompletedAt = "2026-10-31T00:00:00Z";
+  existingAdminCount = 1;
+  const initializedResponse = await worker.fetch(new Request("https://example.test/api/ready"), {
+    DB: db,
+    SUPABASE_URL: "https://project.example.test",
+    SUPABASE_SERVICE_ROLE_KEY: "test-only-service-role-secret",
+    SUPABASE_STORAGE_BUCKET: "golden-films-media",
+  });
+  assert.equal(initializedResponse.status, 200);
+  const initializedBody = await initializedResponse.json() as {
+    status: string;
+    adminSetupComplete: boolean;
+    blockers: string[];
+    notices: string[];
+  };
+  assert.equal(initializedBody.status, "ready");
+  assert.equal(initializedBody.adminSetupComplete, true);
+  assert.deepEqual(initializedBody.blockers, []);
+  assert.deepEqual(initializedBody.notices, ["admin_setup_already_completed"]);
+
+  // The login handler updates this column; readiness must reject a schema that lacks it.
+  schema.admin_users = schema.admin_users.filter(name => name !== "last_login_at");
+  const missingLoginColumn = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
+  assert.equal(missingLoginColumn.status, 503);
+  assert.deepEqual(await missingLoginColumn.json(), { error: "database_schema_incompatible" });
+
+  schema.admin_users.push("last_login_at");
+  schema.site_content = schema.site_content.filter(name => name !== "published_at");
+  const missingPublishColumn = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
+  assert.equal(missingPublishColumn.status, 503);
+  assert.deepEqual(await missingPublishColumn.json(), { error: "database_schema_incompatible" });
 });
 
 test("readiness endpoint rejects a schema missing the enquiry consent column", async () => {
   const schema: Record<string, string[]> = {
-    categories: ["id", "slug", "sort_order", "title_en", "title_hi"],
-    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at", "demo_label"],
+    categories: ["id", "slug", "sort_order", "title_en", "title_hi", "description_en", "description_hi"],
+    projects: ["id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "location", "project_date", "updated_at", "demo_label"],
     project_translations: ["project_id", "locale", "title", "description"],
     project_media: ["id", "project_id", "media_type", "preview_url", "original_key", "alt_en", "alt_hi", "sort_order", "is_public"],
     enquiries: ["id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "status", "created_at", "updated_at"],
     enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
-    admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
+    admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active", "last_login_at"],
     admin_sessions: ["id", "admin_user_id", "token_hash", "expires_at"],
     admin_setup: ["id", "completed_at"],
     auth_rate_limits: ["rate_key", "window_started_at", "request_count"],
     audit_logs: ["id", "admin_user_id", "action", "target_type", "target_id", "created_at"],
-    site_content: ["page_slug", "draft_json", "published_json", "status", "updated_at"],
-    site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "created_at"],
+    site_content: ["page_slug", "draft_json", "published_json", "status", "updated_by", "updated_at", "published_at"],
+    site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "changed_by", "created_at"],
+    gf_monthly_media_usage: ["month_key", "used_bytes", "updated_at"],
   };
   const db = {
     prepare(query: string) {
@@ -388,8 +455,13 @@ test("projects endpoint binds category slug and limit and returns published-proj
   });
 });
 
-test("enquiry form service values pass validation and fail closed when D1 is absent", async () => {
-  for (const service of ["photography", "videography", "photo-editing", "video-editing"]) {
+test("all website photography and videography service IDs pass enquiry validation and fail closed when D1 is absent", async () => {
+  const websiteServices = [
+    "photography", "videography", "photo-editing", "video-editing",
+    "wedding", "pre-wedding", "candid", "maternity", "baby-kids", "event", "fashion", "product", "commercial",
+    "wedding-films", "pre-wedding-films", "cinematic", "event-films", "drone", "corporate", "music-video", "documentary", "ad-films"
+  ];
+  for (const service of websiteServices) {
     const response = await worker.fetch(
       new Request("https://example.test/api/enquiries", {
         method: "POST",
@@ -607,12 +679,12 @@ test("readiness endpoint rejects the repository's canonical migration schema unt
     media: ["id", "project_id", "object_key", "media_type", "mime_type", "size_bytes", "width", "height", "duration_seconds", "is_public_preview", "sort_order", "created_at"],
     enquiries: ["id", "name", "email", "phone", "service", "event_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"],
     enquiry_rate_limits: ["ip_hash", "window_start", "request_count"],
-    admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active"],
+    admin_users: ["id", "email", "password_hash", "password_salt", "role", "is_active", "last_login_at"],
     admin_sessions: ["id", "admin_user_id", "token_hash", "expires_at"],
     admin_setup: ["id", "completed_at"],
     auth_rate_limits: ["rate_key", "window_started_at", "request_count"],
     audit_logs: ["id", "admin_user_id", "action", "target_type", "target_id", "created_at"],
-    site_content: ["page_slug", "draft_json", "published_json", "status", "updated_at"],
+    site_content: ["page_slug", "draft_json", "published_json", "status", "updated_by", "updated_at", "published_at"],
     site_content_revisions: ["id", "page_slug", "content_json", "revision_status", "created_at"]
   };
   const db = {
@@ -632,4 +704,956 @@ test("readiness endpoint rejects the repository's canonical migration schema unt
   const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { error: "database_schema_incompatible" });
+});
+
+test("public media route streams private Supabase Storage objects only after publication check", async () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const mediaId = "22222222-2222-4222-8222-222222222222";
+  const key = `projects/${projectId}/${mediaId}.jpg`;
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  let authorization = "";
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    requestedUrl = String(input);
+    authorization = new Headers(init?.headers).get("authorization") ?? "";
+    return new Response("fake-jpeg-bytes", {
+      status: 200,
+      headers: { "content-type": "image/jpeg", etag: '"media-etag"' },
+    });
+  }) as typeof fetch;
+  try {
+    const db = {
+      prepare(query: string) {
+        assert.match(query, /is_public = 1 AND p\.status = 'published'/);
+        return {
+          bind(...args: unknown[]) {
+            assert.equal(args[0], key);
+            return this;
+          },
+          async first<T>() { return { media_type: "image" } as T; },
+        };
+      },
+    };
+    const response = await worker.fetch(new Request(`https://example.test/api/media/${key}`), {
+      DB: db,
+      SUPABASE_URL: "https://photography-test.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+      SUPABASE_STORAGE_BUCKET: "golden-films-media",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/jpeg");
+    assert.equal(response.headers.get("etag"), '"media-etag"');
+    assert.equal(await response.text(), "fake-jpeg-bytes");
+    assert.equal(requestedUrl, `https://photography-test.supabase.co/storage/v1/object/golden-films-media/${key}`);
+    assert.equal(authorization, "Bearer server-only-test-secret");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("public media route does not fetch private storage for unpublished media", async () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const mediaId = "22222222-2222-4222-8222-222222222222";
+  const originalFetch = globalThis.fetch;
+  let storageRequested = false;
+  globalThis.fetch = (async () => {
+    storageRequested = true;
+    return new Response("unexpected", { status: 200 });
+  }) as typeof fetch;
+  try {
+    const db = {
+      prepare(_query: string) {
+        return {
+          bind(..._args: unknown[]) { return this; },
+          async first<T>() { return null as T | null; },
+        };
+      },
+    };
+    const response = await worker.fetch(
+      new Request(`https://example.test/api/media/projects/${projectId}/${mediaId}.jpg`),
+      {
+        DB: db,
+        SUPABASE_URL: "https://photography-test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+        SUPABASE_STORAGE_BUCKET: "golden-films-media",
+      },
+    );
+    assert.equal(response.status, 404);
+    assert.equal(storageRequested, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("media route fails closed without Supabase config instead of falling back to R2", async () => {
+  let r2ReadAttempted = false;
+  const env = {
+    DB: {
+      prepare(_query: string) {
+        return {
+          bind(..._args: unknown[]) { return this; },
+          async first<T>() { return { media_type: "image" } as T; },
+        };
+      },
+    },
+    MEDIA_BUCKET: {
+      async get(_key: string) {
+        r2ReadAttempted = true;
+        return null;
+      },
+      async put() { throw new Error("R2 must not be used"); },
+      async delete() { throw new Error("R2 must not be used"); },
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/media/projects/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.jpg"),
+    env as never,
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "media_storage_not_configured" });
+  assert.equal(r2ReadAttempted, false);
+});
+
+
+test("media upload enforces multipart size cap when Content-Length is omitted", async () => {
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+  const oversizedBody = new Uint8Array(20 * 1024 * 1024 + 64 * 1024 + 1);
+  const request = new Request("https://example.test/api/admin/projects/media/upload", {
+    method: "POST",
+    headers: {
+      "Content-Type": "multipart/form-data; boundary=upload-boundary",
+      Cookie: "__Host-gf_admin=test-session-token"
+    },
+    body: oversizedBody.buffer as ArrayBuffer
+  });
+  assert.equal(request.headers.has("content-length"), false);
+  const response = await worker.fetch(request, {
+    DB: db,
+    SUPABASE_URL: "https://photography-test.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+    SUPABASE_STORAGE_BUCKET: "golden-films-media"
+  });
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "file_too_large" });
+});
+
+test("media upload rejects a JPEG MIME type when the file signature is not JPEG", async () => {
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob(["this is not a JPEG"], { type: "image/jpeg" }), "not-a-photo.jpg");
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/media/upload", {
+      method: "POST",
+      headers: { Cookie: "__Host-gf_admin=test-session-token" },
+      body: form
+    }),
+    {
+      DB: db,
+      SUPABASE_URL: "https://photography-test.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+      SUPABASE_STORAGE_BUCKET: "golden-films-media"
+    } as never
+  );
+  assert.equal(response.status, 415);
+  assert.deepEqual(await response.json(), { error: "file_signature_mismatch" });
+});
+
+test("media upload rejects unsupported MIME types before project or storage writes", async () => {
+  let projectQueryAttempted = false;
+  const db = {
+    prepare(query: string) {
+      if (query.includes("SELECT id, status FROM projects")) projectQueryAttempted = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    }
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob(["<svg></svg>"], { type: "image/svg+xml" }), "vector.svg");
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/media/upload", {
+      method: "POST",
+      headers: { Cookie: "__Host-gf_admin=test-session-token" },
+      body: form
+    }),
+    {
+      DB: db,
+      SUPABASE_URL: "https://photography-test.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+      SUPABASE_STORAGE_BUCKET: "golden-films-media"
+    } as never
+  );
+  assert.equal(response.status, 415);
+  assert.equal(projectQueryAttempted, false);
+  assert.equal((await response.json() as { error: string }).error, "unsupported_media_type");
+});
+
+
+test("media upload rejects an upload that would exceed the shared monthly quota before contacting storage", async () => {
+  let storageContacted = false;
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          if (query.includes("SELECT id, status FROM projects")) {
+            return { id: "11111111-1111-4111-8111-111111111111", status: "published" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    },
+    async batch(_statements: unknown[]) {
+      return [
+        { success: true, meta: { changes: 0 } },
+        { success: true, meta: { changes: 0 } }
+      ];
+    }
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])], { type: "image/jpeg" }), "quota-test.jpg");
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+    storageContacted = true;
+    return originalFetch(...args);
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/admin/projects/media/upload", {
+        method: "POST",
+        headers: { Cookie: "__Host-gf_admin=test-session-token" },
+        body: form
+      }),
+      {
+        DB: db,
+        SUPABASE_URL: "https://photography-test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+        SUPABASE_STORAGE_BUCKET: "golden-films-media"
+      } as never
+    );
+    assert.equal(response.status, 413);
+    assert.equal((await response.json() as { error: string }).error, "monthly_upload_quota_exceeded");
+    assert.equal(storageContacted, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("media upload deletes the uploaded object and releases quota when D1 persistence fails", async () => {
+  let batchCalls = 0;
+  let storageUploaded = false;
+  let storageDeleted = false;
+  let quotaReleased = false;
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          if (query.includes("SELECT id, status FROM projects")) {
+            return { id: "11111111-1111-4111-8111-111111111111", status: "published" } as T;
+          }
+          return null as T | null;
+        },
+        async run() {
+          if (query.includes("UPDATE gf_monthly_media_usage SET used_bytes = MAX(0, used_bytes - ?)")) {
+            quotaReleased = true;
+          }
+          return { success: true, meta: { changes: 1 } };
+        },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    },
+    async batch(_statements: unknown[]) {
+      batchCalls += 1;
+      if (batchCalls === 1) {
+        return [
+          { success: true, meta: { changes: 0 } },
+          { success: true, meta: { changes: 1 } }
+        ];
+      }
+      throw new Error("simulated D1 persistence failure after object upload");
+    }
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set(
+    "file",
+    new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])], { type: "image/jpeg" }),
+    "rollback-test.jpg"
+  );
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+    if (method === "POST") {
+      storageUploaded = true;
+      return new Response(null, { status: 200 });
+    }
+    if (method === "DELETE") {
+      storageDeleted = true;
+      return new Response(null, { status: 200 });
+    }
+    return new Response("unexpected storage method", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/admin/projects/media/upload", {
+        method: "POST",
+        headers: { Cookie: "__Host-gf_admin=test-session-token" },
+        body: form
+      }),
+      {
+        DB: db,
+        SUPABASE_URL: "https://photography-test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+        SUPABASE_STORAGE_BUCKET: "golden-films-media"
+      } as never
+    );
+
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: "media_upload_unavailable" });
+    assert.equal(storageUploaded, true);
+    assert.equal(storageDeleted, true);
+    assert.equal(quotaReleased, true);
+    assert.equal(batchCalls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("media upload releases the reserved monthly quota when Supabase rejects the upload", async () => {
+  let storageUploadAttempted = false;
+  let storageDeleteAttempted = false;
+  let quotaReleased = false;
+  let batchCalls = 0;
+  const db = {
+    prepare(query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          if (query.includes("SELECT id, status FROM projects")) {
+            return { id: "11111111-1111-4111-8111-111111111111", status: "published" } as T;
+          }
+          return null as T | null;
+        },
+        async run() {
+          if (query.includes("UPDATE gf_monthly_media_usage SET used_bytes = MAX(0, used_bytes - ?)")) {
+            quotaReleased = true;
+          }
+          return { success: true, meta: { changes: 1 } };
+        },
+        async all<T>() { return { success: true, results: [] as T[] }; }
+      };
+    },
+    async batch(_statements: unknown[]) {
+      batchCalls += 1;
+      return [
+        { success: true, meta: { changes: 0 } },
+        { success: true, meta: { changes: 1 } }
+      ];
+    }
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set(
+    "file",
+    new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])], { type: "image/jpeg" }),
+    "storage-failure-test.jpg"
+  );
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    if (method === "POST") {
+      storageUploadAttempted = true;
+      return new Response("simulated storage outage", { status: 503 });
+    }
+    if (method === "DELETE") storageDeleteAttempted = true;
+    return new Response("unexpected storage method", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/admin/projects/media/upload", {
+        method: "POST",
+        headers: { Cookie: "__Host-gf_admin=test-session-token" },
+        body: form
+      }),
+      {
+        DB: db,
+        SUPABASE_URL: "https://photography-test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+        SUPABASE_STORAGE_BUCKET: "golden-films-media"
+      } as never
+    );
+
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: "media_upload_unavailable" });
+    assert.equal(storageUploadAttempted, true);
+    assert.equal(storageDeleteAttempted, false);
+    assert.equal(quotaReleased, true);
+    assert.equal(batchCalls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("admin setup fails closed when the setup secret is not configured", async () => {
+  const db = {
+    prepare(_query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "owner@example.test", password: "a-long-test-password-123" }),
+    }),
+    { DB: db },
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "admin_setup_not_configured" });
+  assert.equal(response.headers.get("set-cookie"), null, "setup must not create a session without configured setup authorization");
+});
+
+test("admin session endpoint rejects requests without a valid session cookie", async () => {
+  let query = "";
+  const db = {
+    prepare(sql: string) {
+      query = sql;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/session", { method: "GET", headers: { Cookie: "__Host-gf_admin=invalid-session-token" } }),
+    { DB: db },
+  );
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { authenticated: false });
+  assert.match(query, /admin_sessions/);
+  assert.match(query, /expires_at > datetime\('now'\)/);
+});
+
+test("admin logout rejects unauthenticated requests without clearing a session cookie", async () => {
+  const db = {
+    prepare(_query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/logout", {
+      method: "POST",
+      headers: { Cookie: "__Host-gf_admin=invalid-session-token" },
+    }),
+    { DB: db },
+  );
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+  assert.equal(response.headers.get("set-cookie"), null);
+});
+
+
+test("admin portfolio list requires an authenticated session", async () => {
+  let databaseAccessed = false;
+  const db = {
+    prepare(_query: string) {
+      databaseAccessed = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects", { method: "GET" }),
+    { DB: db },
+  );
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+  assert.equal(databaseAccessed, false, "unauthenticated requests should not query portfolio data");
+});
+
+test("admin portfolio save rejects invalid slug and unsafe cover URL before database writes", async () => {
+  let databaseAccessed = false;
+  const db = {
+    prepare(_query: string) {
+      databaseAccessed = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slug: "../unsafe",
+        categorySlug: "wedding-photography",
+        titleEn: "Wedding",
+        titleHi: "शादी",
+        descriptionEn: "",
+        descriptionHi: "",
+        coverImageUrl: "http://127.0.0.1/private.jpg",
+        status: "draft",
+      }),
+    }),
+    { DB: db },
+  );
+  assert.equal(response.status, 401, "authentication must be checked before portfolio mutations");
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+  assert.equal(databaseAccessed, false, "unauthenticated invalid payload must not access the database");
+});
+
+test("admin portfolio save validates slug, status, and cover URL for authenticated users", async () => {
+  const db = {
+    prepare(_query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/save", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: "__Host-gf_admin=invalid-session-token",
+      },
+      body: JSON.stringify({
+        slug: "../unsafe",
+        categorySlug: "wedding-photography",
+        titleEn: "Wedding",
+        titleHi: "शादी",
+        coverImageUrl: "http://127.0.0.1/private.jpg",
+        status: "published",
+      }),
+    }),
+    { DB: db },
+  );
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+});
+
+
+test("media upload rejects unauthenticated requests before parsing or touching storage", async () => {
+  let databaseQueries = 0;
+  let storageContacted = false;
+  const db = {
+    prepare(_query: string) {
+      databaseQueries += 1;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], { type: "image/jpeg" }), "private.jpg");
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+    storageContacted = true;
+    return originalFetch(...args);
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/admin/projects/media/upload", { method: "POST", body: form }),
+      {
+        DB: db,
+        SUPABASE_URL: "https://photography-test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+        SUPABASE_STORAGE_BUCKET: "golden-films-media",
+      } as never,
+    );
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { error: "unauthorized" });
+    assert.equal(databaseQueries, 0, "unauthenticated request should not query D1");
+    assert.equal(storageContacted, false, "unauthenticated request should not contact object storage");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("media upload returns a clear configuration error when server-side storage credentials are absent", async () => {
+  let projectQueryAttempted = false;
+  const db = {
+    prepare(query: string) {
+      if (query.includes("SELECT id, status FROM projects")) projectQueryAttempted = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], { type: "image/jpeg" }), "test.jpg");
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/media/upload", {
+      method: "POST",
+      headers: { Cookie: "__Host-gf_admin=test-session-token" },
+      body: form,
+    }),
+    { DB: db } as never,
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "media_storage_not_configured" });
+  assert.equal(projectQueryAttempted, false, "storage configuration should be checked before project/storage writes");
+});
+
+
+test("media hide requires owner role before querying or mutating media", async () => {
+  let mediaQueryAttempted = false;
+  let mutationAttempted = false;
+  const db = {
+    prepare(query: string) {
+      if (query.includes("SELECT m.preview_url, p.cover_image_url")) mediaQueryAttempted = true;
+      if (query.includes("UPDATE project_media SET is_public")) mutationAttempted = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "editor-id", email: "editor@example.test", role: "editor" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 1 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/media/hide", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: "__Host-gf_admin=editor-session-token",
+      },
+      body: JSON.stringify({ id: "media-123" }),
+    }),
+    { DB: db } as never,
+  );
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: "forbidden" });
+  assert.equal(mediaQueryAttempted, false, "editor must be rejected before reading media metadata");
+  assert.equal(mutationAttempted, false, "editor must not be able to hide media");
+});
+
+test("media replace requires authentication before reading or updating media", async () => {
+  let mediaQueryAttempted = false;
+  let mutationAttempted = false;
+  const db = {
+    prepare(query: string) {
+      if (query.includes("JOIN projects p ON p.id = m.project_id")) mediaQueryAttempted = true;
+      if (query.includes("UPDATE project_media SET preview_url")) mutationAttempted = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 1 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/media/replace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: "media-123",
+        previewUrl: "https://cdn.example.test/replacement.jpg",
+        altEn: "Replacement",
+        altHi: "प्रतिस्थापन",
+      }),
+    }),
+    { DB: db } as never,
+  );
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+  assert.equal(mediaQueryAttempted, false);
+  assert.equal(mutationAttempted, false);
+});
+
+
+test("monthly upload quota uses an atomic conditional D1 reservation before storage upload", async () => {
+  const batchQueries: Array<{ query: string; values: unknown[] }> = [];
+  let storageContacted = false;
+  const db = {
+    prepare(query: string) {
+      let values: unknown[] = [];
+      return {
+        bind(...args: unknown[]) { values = args; this.values = args; return this; },
+        async first<T>() {
+          if (query.includes("SELECT u.id, u.email, u.role FROM admin_sessions")) {
+            return { id: "owner-id", email: "owner@example.test", role: "owner" } as T;
+          }
+          if (query.includes("SELECT id, status FROM projects")) {
+            return { id: "11111111-1111-4111-8111-111111111111", status: "draft" } as T;
+          }
+          return null as T | null;
+        },
+        async run() { return { success: true, meta: { changes: 1 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+        query,
+        values,
+      };
+    },
+    async batch(statements: Array<{ query: string; values: unknown[] }>) {
+      for (const statement of statements) batchQueries.push(statement);
+      return [
+        { success: true, meta: { changes: 0 } },
+        { success: true, meta: { changes: 0 } },
+      ];
+    },
+  };
+  const form = new FormData();
+  form.set("projectId", "11111111-1111-4111-8111-111111111111");
+  form.set("file", new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])], { type: "image/jpeg" }), "quota-boundary.jpg");
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+    storageContacted = true;
+    return originalFetch(...args);
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/admin/projects/media/upload", {
+        method: "POST",
+        headers: { Cookie: "__Host-gf_admin=test-session-token" },
+        body: form,
+      }),
+      {
+        DB: db,
+        SUPABASE_URL: "https://photography-test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+        SUPABASE_STORAGE_BUCKET: "golden-films-media",
+      } as never,
+    );
+    assert.equal(response.status, 413);
+    assert.deepEqual((await response.json() as { error: string }).error, "monthly_upload_quota_exceeded");
+    assert.equal(batchQueries.length, 2, "quota row creation and conditional reservation should be batched");
+    assert.match(batchQueries[1].query, /used_bytes = used_bytes \+ \?/);
+    assert.match(batchQueries[1].query, /used_bytes \+ \? <= \?/);
+    assert.equal(batchQueries[1].values[0], 8, "reservation must account for actual file bytes");
+    assert.equal(batchQueries[1].values[1], new Date().toISOString().slice(0, 7), "quota key must use UTC calendar month");
+    assert.equal(storageContacted, false, "storage must not be contacted if the atomic reservation fails");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("enquiry endpoint rejects missing consent and invalid service before database access", async () => {
+  let databaseContacted = false;
+  const db = {
+    prepare(_query: string) {
+      databaseContacted = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const cases = [
+    {
+      name: "missing consent",
+      body: {
+        name: "Sample Visitor",
+        email: "visitor@example.test",
+        service: "photography",
+        message: "Please contact me about a photography booking.",
+      },
+    },
+    {
+      name: "unknown service",
+      body: {
+        name: "Sample Visitor",
+        email: "visitor@example.test",
+        service: "made-up-service",
+        message: "Please contact me about a photography booking.",
+        consent: true,
+      },
+    },
+    {
+      name: "impossible calendar date",
+      body: {
+        name: "Sample Visitor",
+        email: "visitor@example.test",
+        service: "photography",
+        eventDate: "2026-02-30",
+        message: "Please contact me about a photography booking.",
+        consent: true,
+      },
+    },
+  ];
+  for (const item of cases) {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/v1/enquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item.body),
+      }),
+      { DB: db },
+    );
+    assert.equal(response.status, 400, item.name);
+    assert.deepEqual(await response.json(), { error: "validation_failed" }, item.name);
+  }
+  assert.equal(databaseContacted, false, "invalid enquiry payloads must be rejected before D1 access");
+});
+
+test("enquiry honeypot quietly accepts spam without database writes", async () => {
+  let databaseContacted = false;
+  const db = {
+    prepare(_query: string) {
+      databaseContacted = true;
+      throw new Error("honeypot must short-circuit before database access");
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/v1/enquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Spam Bot",
+        email: "bot@example.test",
+        service: "photography",
+        message: "This is spam content that should be ignored.",
+        consent: true,
+        website: "https://spam.example",
+      }),
+    }),
+    { DB: db },
+  );
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), { ok: true, message: "Enquiry received." });
+  assert.equal(databaseContacted, false);
+});
+
+
+test("CMS draft and revision endpoints require an authenticated admin", async () => {
+  let databaseWrites = 0;
+  const db = {
+    prepare(_query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { databaseWrites++; return { success: true, meta: { changes: 1 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  for (const url of [
+    "https://example.test/api/admin/content",
+    "https://example.test/api/admin/content/revisions?page=home",
+  ]) {
+    const response = await worker.fetch(new Request(url), { DB: db });
+    assert.equal(response.status, 401, url);
+    assert.deepEqual(await response.json(), { error: "unauthorized" }, url);
+  }
+  assert.equal(databaseWrites, 0, "unauthenticated CMS requests must not write to D1");
+});
+
+test("public CMS endpoint rejects unknown page slugs before database access", async () => {
+  let databaseContacted = false;
+  const db = {
+    prepare(_query: string) {
+      databaseContacted = true;
+      throw new Error("invalid page must be rejected before database access");
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/content?page=unknown-page"),
+    { DB: db },
+  );
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "invalid_page" });
+  assert.equal(databaseContacted, false);
 });

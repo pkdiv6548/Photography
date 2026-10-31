@@ -2,6 +2,12 @@
 -- DO NOT run against production until a verified D1 export has been restored to
 -- a disposable database and this exact migration plus the verification queries pass.
 -- Historical enquiries receive consent=0: do not infer consent from old records.
+-- The current category API selects bilingual descriptions; the legacy schema has
+-- title_en/title_hi but lacks description_en/description_hi. Additive defaults keep
+-- existing categories readable without inventing descriptions.
+ALTER TABLE categories ADD COLUMN description_en TEXT NOT NULL DEFAULT '';
+ALTER TABLE categories ADD COLUMN description_hi TEXT NOT NULL DEFAULT '';
+
 --
 -- The live enquiries.email column is NOT NULL, but the current API permits phone-only
 -- enquiries. SQLite cannot drop NOT NULL with ALTER COLUMN, so rebuild this table.
@@ -64,7 +70,16 @@ CREATE TABLE IF NOT EXISTS site_content_revisions (
 CREATE INDEX IF NOT EXISTS idx_site_content_revisions_page_created
   ON site_content_revisions(page_slug, created_at DESC);
 
+-- Shared 100 MiB UTC-calendar-month media-upload quota ledger.
+-- This records newly uploaded bytes; deleting media does not retroactively restore quota.
+CREATE TABLE IF NOT EXISTS gf_monthly_media_usage (
+  month_key TEXT PRIMARY KEY,
+  used_bytes INTEGER NOT NULL DEFAULT 0 CHECK (used_bytes >= 0),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Post-migration verification:
+-- PRAGMA table_info(categories) must show description_en and description_hi as NOT NULL with empty-string defaults.
 -- PRAGMA table_info(enquiries) must show email with notnull=0 and consent INTEGER NOT NULL DEFAULT 0.
 -- PRAGMA table_info(admin_users) must show role TEXT NOT NULL DEFAULT 'editor';
 -- SELECT COUNT(*) FROM enquiries WHERE consent NOT IN (0,1) must return 0.

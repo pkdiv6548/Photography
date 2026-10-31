@@ -15,7 +15,7 @@ function mockDb() {
   };
 }
 
-test("public media route fails closed when R2 binding is unavailable", async () => {
+test("public media route fails closed when Supabase Storage is not configured", async () => {
   const response = await worker.fetch(
     new Request("https://example.test/api/media/projects/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000002.jpg"),
     { DB: mockDb() },
@@ -24,7 +24,7 @@ test("public media route fails closed when R2 binding is unavailable", async () 
   assert.deepEqual(await response.json(), { error: "media_storage_not_configured" });
 });
 
-test("media upload requires an authenticated admin before checking R2 availability", async () => {
+test("media upload requires an authenticated admin before checking Supabase Storage configuration", async () => {
   const response = await worker.fetch(
     new Request("https://example.test/api/admin/projects/media/upload", {
       method: "POST",
@@ -36,7 +36,7 @@ test("media upload requires an authenticated admin before checking R2 availabili
   assert.deepEqual(await response.json(), { error: "unauthorized" });
 });
 
-test("media upload reports unavailable storage when an authenticated session is absent and R2 is not configured", async () => {
+test("media upload rejects an invalid session before checking Supabase Storage configuration", async () => {
   const response = await worker.fetch(
     new Request("https://example.test/api/admin/projects/media/upload", {
       method: "POST",

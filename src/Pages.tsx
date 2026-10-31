@@ -647,6 +647,8 @@ function AdminPortfolioManager({ canPublish }: { canPublish: boolean }) {
       const data = await response.json() as { error?: string };
       if (!response.ok) {
         if (data.error === "media_storage_not_configured") throw new Error("storage_not_configured");
+        if (data.error === "monthly_upload_quota_exceeded") throw new Error("monthly_quota_exceeded");
+        if (data.error === "file_too_large") throw new Error("file_too_large");
         throw new Error(data.error || "upload_failed");
       }
       setUploadFile(null);
@@ -658,8 +660,12 @@ function AdminPortfolioManager({ canPublish }: { canPublish: boolean }) {
       await load();
     } catch (error) {
       setMessage(error instanceof Error && error.message === "storage_not_configured"
-        ? "Direct uploads are not active: the Cloudflare R2 bucket is not configured. URL-based media management remains available."
-        : "Upload failed. Use a supported image/video file under 20 MB and check storage configuration.");
+        ? "Direct uploads are not active because Supabase Storage is not configured. URL-based media management remains available."
+        : error instanceof Error && error.message === "monthly_quota_exceeded"
+          ? "Monthly upload limit reached (100 MiB per UTC calendar month). Try again next month."
+          : error instanceof Error && error.message === "file_too_large"
+            ? "This upload exceeds the 20 MiB per-file limit. Choose a smaller file."
+            : "Upload failed. Use a supported image/video file under 20 MiB and check Supabase Storage configuration.");
     } finally { setSaving(false); }
   };
 
@@ -701,7 +707,7 @@ function AdminPortfolioManager({ canPublish }: { canPublish: boolean }) {
   const selectedMedia = media.filter(item => item.project_id === selectedProjectId);
   return <section className="service-card" style={{ marginTop: 30 }}>
     <p className="eyebrow"><span/> PORTFOLIO MANAGEMENT</p><h2>Projects & hosted media</h2>
-    <p className="section-subtitle">Create draft/published portfolio projects and manage HTTPS media URLs. Direct file uploads are unavailable until R2 storage is enabled and approved.</p>
+    <p className="section-subtitle">Create draft/published portfolio projects, manage HTTPS media URLs, or upload files to private Supabase Storage. Direct uploads require the Supabase server-side secret to be configured.</p>
     {loading && <p className="section-subtitle">Loading projects…</p>}
     {!loading && <form onSubmit={saveProject}>
       <h3 style={{ marginTop: 20 }}>Create or update project</h3>
@@ -782,7 +788,7 @@ function AdminPortfolioManager({ canPublish }: { canPublish: boolean }) {
     </form>
     <form onSubmit={uploadMedia} style={{ marginTop: 28 }}>
       <h3>Upload image or video</h3>
-      <p className="section-subtitle">Supported: JPEG, PNG, WebP, GIF, MP4 and WebM; maximum 20 MB. Upload stays disabled until an R2 bucket is configured.</p>
+      <p className="section-subtitle">Supabase Storage upload: JPEG, PNG, WebP, GIF, MP4 and WebM. Maximum 20 MiB per file and 100 MiB total uploads per UTC calendar month. Files remain private unless an owner publishes them.</p>
       <div className="services-grid" style={{ marginTop: 16 }}>
         <label style={{ display: "grid", gap: 8, fontSize: 12 }}>Choose file
           <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" onChange={e => setUploadFile(e.target.files?.[0] ?? null)} />
@@ -892,7 +898,7 @@ function AdminSystemStatus() {
     ["Enquiry schema + consent", data.enquirySchemaReady],
     ["Portfolio schema", data.portfolioSchemaReady],
     ["CMS tables", data.contentTablesReady],
-    ["R2 media storage", data.mediaStorageConfigured],
+    ["Supabase Storage", data.mediaStorageConfigured],
     ["Setup secret", data.adminSetupSecretConfigured],
   ] as Array<[string, boolean]> : [];
   return <section className="service-card" style={{ marginTop: 24 }}>

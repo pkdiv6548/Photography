@@ -214,7 +214,7 @@ test("initial owner setup fails closed when transactional D1 batch is unavailabl
     body: JSON.stringify({ email: "owner@example.test", password: "long-secure-password-123" })
   }), { DB: db, ADMIN_SETUP_SECRET: "expected-secret" });
   assert.equal(response.status, 503);
-  assert.deepEqual(await response.json(), { error: "admin_setup_unavailable" });
+  assert.deepEqual(await response.json(), { error: "admin_setup_unavailable", diagnosticStage: "d1_batch" });
 });
 
 test("initial owner setup explicitly grants owner only when no admin exists and setup is incomplete", async () => {
