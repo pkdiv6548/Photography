@@ -453,3 +453,74 @@ img { display: block; max-width: 100%; }
   text-underline-offset: 4px;
 }
 .gf-booking-package > a:hover { text-decoration-color: currentColor; }
+
+
+/* Golden Films visual refinement — editorial depth, responsive polish, and clearer card hierarchy. */
+.hero {
+  isolation: isolate;
+  min-height: clamp(520px, 39vw, 650px);
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 520px;
+  height: 520px;
+  left: -240px;
+  top: 3%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(217,173,99,.09), transparent 68%);
+  pointer-events: none;
+}
+.hero-visual {
+  border: 1px solid rgba(217,173,99,.16);
+  box-shadow: 0 28px 90px rgba(0,0,0,.28);
+}
+.hero-image-note {
+  padding: 18px 20px;
+  background: linear-gradient(0deg, rgba(8,10,12,.82), rgba(8,10,12,.08));
+}
+.service-strip-item {
+  position: relative;
+  transition: background .25s ease, transform .25s ease, border-color .25s ease;
+}
+.service-strip-item:hover {
+  background: linear-gradient(135deg, rgba(217,173,99,.09), rgba(217,173,99,.015));
+}
+.service-strip-item:hover .service-icon {
+  border-color: rgba(244,207,139,.7);
+  color: var(--gold-bright);
+}
+.category-image {
+  border-color: rgba(217,173,99,.2);
+  box-shadow: 0 10px 30px rgba(0,0,0,.12);
+}
+.category-card:hover .category-image {
+  border-color: rgba(244,207,139,.62);
+  box-shadow: 0 18px 44px rgba(0,0,0,.3);
+}
+.category-card-copy h3 {
+  transition: color .2s ease;
+}
+.category-card:hover .category-card-copy h3 {
+  color: var(--gold-bright);
+}
+.project-card, .showreel-card {
+  transition: transform .28s ease, border-color .28s ease;
+}
+.project-card:hover, .showreel-card:hover {
+  transform: translateY(-4px);
+}
+.demo-banner {
+  min-height: 32px;
+  padding-block: 7px;
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .service-strip-item, .category-image img, .category-card-copy h3,
+  .project-card, .showreel-card {
+    transition: none !important;
+  }
+  .project-card:hover, .showreel-card:hover { transform: none; }
+}
