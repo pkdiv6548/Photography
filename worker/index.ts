@@ -239,7 +239,9 @@ async function enforceEnquiryRateLimit(request: Request, env: Env): Promise<Resp
 }
 
 
-const ADMIN_PASSWORD_ITERATIONS = 310_000;
+// Keep PBKDF2 within Cloudflare Workers' constrained runtime budget.
+// Login and account creation use the same constant, so hashes remain compatible.
+const ADMIN_PASSWORD_ITERATIONS = 100_000;
 const ADMIN_SESSION_SECONDS = 8 * 60 * 60;
 const AUTH_RATE_WINDOW_SECONDS = 15 * 60;
 const AUTH_RATE_MAX_ATTEMPTS = 10;
