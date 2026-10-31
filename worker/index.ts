@@ -827,7 +827,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
       if (!supabaseStorageConfigured) blockers.push("supabase_storage_not_configured");
       if (adminSetupComplete) blockers.push("admin_setup_already_completed");
       return json({
-        status: "ready",
+        status: blockers.length === 0 ? "ready" : "blocked",
         schema: "legacy-compatible",
         adminSetupSecretConfigured: Boolean(env.ADMIN_SETUP_SECRET),
         supabaseStorageConfigured,
