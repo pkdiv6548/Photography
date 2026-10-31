@@ -361,16 +361,19 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
     }
     const id = crypto.randomUUID();
     const salt = crypto.getRandomValues(new Uint8Array(16));
+    let setupStage = "derive_password_and_prepare_statements";
     try {
       // D1 batch executes the statements transactionally. Each follow-up statement
       // is conditional on the owner insert, so a repeated setup cannot mark setup
       // complete or emit an audit row without creating the initial owner.
+      const passwordHash = await deriveAdminPassword(password, salt);
+      const passwordSalt = toBase64Url(salt);
       const statements = [
         env.DB.prepare(
           "INSERT INTO admin_users (id, email, password_hash, password_salt, role, is_active) " +
           "SELECT ?, ?, ?, ?, 'owner', 1 WHERE NOT EXISTS (SELECT 1 FROM admin_users) " +
           "AND EXISTS (SELECT 1 FROM admin_setup WHERE id = 1 AND completed_at IS NULL)"
-        ).bind(id, email, await deriveAdminPassword(password, salt), toBase64Url(salt)),
+        ).bind(id, email, passwordHash, passwordSalt),
         env.DB.prepare(
           "UPDATE admin_setup SET completed_at = datetime('now') " +
           "WHERE id = 1 AND completed_at IS NULL AND EXISTS (SELECT 1 FROM admin_users WHERE id = ?)"
@@ -380,14 +383,22 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
           "SELECT ?, ?, 'initial_setup', 'admin', ? WHERE EXISTS (SELECT 1 FROM admin_users WHERE id = ?)"
         ).bind(crypto.randomUUID(), id, id, id),
       ];
+      setupStage = "d1_batch";
       const results = await env.DB.batch(statements);
+      setupStage = "verify_owner_insert";
       if ((results[0]?.meta?.changes ?? 0) !== 1) {
         return json({ error: "initial_setup_already_completed" }, 409);
       }
       return json({ ok: true, message: "Initial owner created. Sign in to continue." }, 201);
     } catch (error) {
-      // Log the database/runtime cause for Preview debugging; never return it to the browser.
-      console.error("[admin-setup] owner creation failed", error instanceof Error ? error.message : String(error));
+      // Stage and error class/message help Preview debugging. Never log credentials,
+      // request headers, hashes, salts, or the request body.
+      const safeMessage = error instanceof Error ? error.message : String(error);
+      console.error("[admin-setup] owner creation failed", JSON.stringify({
+        stage: setupStage,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        error: safeMessage.slice(0, 300),
+      }));
       return json({ error: "admin_setup_unavailable" }, 503);
     }
   }
