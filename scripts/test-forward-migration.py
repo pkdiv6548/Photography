@@ -351,6 +351,36 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
         )
         self.assertEqual(list(self.db.execute("PRAGMA foreign_key_check")), [])
 
+        # Verify every explicit Worker ON CONFLICT target against the real SQLite
+        # index metadata. Column existence alone is insufficient: SQLite raises
+        # "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint"
+        # if the exact ordered target is not backed by a unique key.
+        conflict_targets = {
+            "categories": ("slug",),
+            "projects": ("slug",),
+            "project_translations": ("project_id", "locale"),
+            "enquiry_rate_limits": ("ip_hash", "window_start"),
+            "auth_rate_limits": ("rate_key",),
+            "site_content": ("page_slug",),
+            "gf_monthly_media_usage": ("month_key",),
+        }
+        for table, expected_columns in conflict_targets.items():
+            matching_unique_keys = []
+            for index in self.db.execute(f"PRAGMA index_list({table})"):
+                if not index["unique"]:
+                    continue
+                index_name = index["name"].replace('"', '""')
+                columns = tuple(
+                    row["name"]
+                    for row in self.db.execute(f'PRAGMA index_info("{index_name}")')
+                )
+                matching_unique_keys.append(columns)
+            self.assertIn(
+                expected_columns,
+                matching_unique_keys,
+                f"{table} must have a UNIQUE/PRIMARY KEY target on {expected_columns} for Worker upserts",
+            )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
