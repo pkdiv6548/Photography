@@ -11,7 +11,7 @@ REQUIRED_COLUMNS = {
     "categories": {"id", "slug", "sort_order", "title_en", "title_hi", "description_en", "description_hi"},
     "projects": {"id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at", "demo_label"},
     "project_translations": {"project_id", "locale", "title", "description"},
-    "project_media": {"id", "project_id", "media_type", "preview_url", "original_key", "alt_en", "alt_hi", "sort_order", "is_public"},
+    "project_media": {"id", "project_id", "media_type", "preview_url", "original_key", "alt_en", "alt_hi", "sort_order", "is_public", "created_at"},
     "enquiries": {"id", "name", "email", "phone", "service", "preferred_date", "budget_range", "message", "consent", "status", "created_at", "updated_at"},
     "enquiry_rate_limits": {"ip_hash", "window_start", "request_count"},
     "admin_users": {"id", "email", "password_hash", "password_salt", "role", "is_active", "created_at", "last_login_at"},
@@ -70,12 +70,12 @@ def main():
         "('project-test', 'hi', 'पहला शीर्षक', 'पहला विवरण', 'हिंदी alt')"
     )
     db.execute(
-        "INSERT INTO media (id, project_id, object_key, media_type, mime_type, size_bytes, is_public_preview) "
-        "VALUES ('media-test', 'project-test', 'projects/test/photo.jpg', 'image', 'image/jpeg', 100, 1)"
+        "INSERT INTO media (id, project_id, object_key, media_type, mime_type, size_bytes, is_public_preview, created_at) "
+        "VALUES ('media-test', 'project-test', 'projects/test/photo.jpg', 'image', 'image/jpeg', 100, 1, '2026-10-30T10:00:00.000Z')
     )
     db.execute(
-        "INSERT INTO media (id, project_id, object_key, media_type, mime_type, size_bytes, is_public_preview) "
-        "VALUES ('media-private-video', 'project-test', 'projects/test/clip.mp4', 'video', 'video/mp4', 250, 0)"
+        "INSERT INTO media (id, project_id, object_key, media_type, mime_type, size_bytes, is_public_preview, created_at) "
+        "VALUES ('media-private-video', 'project-test', 'projects/test/clip.mp4', 'video', 'video/mp4', 250, 0, '2026-10-30T11:00:00.000Z')
     )
     db.commit()
     db.executescript(BRIDGE.read_text(encoding="utf-8"))
@@ -144,19 +144,21 @@ def main():
     assert title == "Updated title", title
 
     media = db.execute(
-        "SELECT media_type, preview_url, original_key, alt_en, alt_hi, is_public FROM project_media WHERE id='media-test'"
+        "SELECT media_type, preview_url, original_key, alt_en, alt_hi, is_public, created_at FROM project_media WHERE id='media-test'"
     ).fetchone()
     assert media["media_type"] == "image", media
     assert media["preview_url"] == "/api/media/projects/test/photo.jpg", media
     assert media["original_key"] == "projects/test/photo.jpg" and media["is_public"] == 1, media
     assert media["alt_en"] == "English alt" and media["alt_hi"] == "हिंदी alt", media
+    assert media["created_at"] == "2026-10-30T10:00:00.000Z", media
 
     private_video = db.execute(
-        "SELECT media_type, preview_url, original_key, is_public FROM project_media WHERE id='media-private-video'"
+        "SELECT media_type, preview_url, original_key, is_public, created_at FROM project_media WHERE id='media-private-video'"
     ).fetchone()
     assert private_video["media_type"] == "video", private_video
     assert private_video["preview_url"] == "/api/media/projects/test/clip.mp4", private_video
     assert private_video["original_key"] == "projects/test/clip.mp4" and private_video["is_public"] == 0, private_video
+    assert private_video["created_at"] == "2026-10-30T11:00:00.000Z", private_video
 
     # Least privilege: omitted role must never promote a new account to owner.
     admin_role = next(row for row in db.execute("PRAGMA table_info(admin_users)") if row["name"] == "role")
