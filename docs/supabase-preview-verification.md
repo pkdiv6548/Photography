@@ -4,15 +4,17 @@ Use this checklist only in the **Preview** environment and a test admin account.
 
 ## Configure Preview secrets in the Cloudflare dashboard
 
-1. Open the official Cloudflare dashboard: https://dash.cloudflare.com/ and choose the account containing the `golden-films` Pages project.
-2. Open **Workers & Pages → golden-films → Settings → Variables and Secrets** (the exact label can vary slightly).
-3. Select the **Preview** environment. Do not accidentally edit Production while testing.
-4. Add `SUPABASE_SERVICE_ROLE_KEY` as a **Secret**, not plain text. Copy the service-role/secret key from the dedicated Supabase **Photography** project only. Never paste it into chat, source files, GitHub, client-side `VITE_*` variables, browser storage, or shared Postman environments.
-5. Add `ADMIN_SETUP_SECRET` as a separate strong, random Preview-only **Secret**. Do not reuse the Supabase key or a production credential. Store it in a password manager.
-6. Confirm the existing non-secret variables remain correct: `SUPABASE_URL=https://lxaqpktmnjzbhtcityyc.supabase.co` and `SUPABASE_STORAGE_BUCKET=golden-films-media`.
-7. Save the changes and trigger/retry a Preview deployment for branch `feat/supabase-storage-free-tier`. Wait until both build and deploy report success. A secret change is not validated until the new deployment is active.
+**Hold status:** The user has explicitly placed `SUPABASE_SERVICE_ROLE_KEY` setup on hold. Do not add, rotate, request, or change that secret until the user explicitly resumes this task. While this hold remains, skip live Storage upload/read/delete tests; continue only source review, isolated automated tests, and non-secret checks.
 
-If the dashboard does not offer the Secret type, stop and resolve account permissions. Do not put a sensitive key into a plain-text variable as a workaround.
+When the user resumes secret configuration:
+
+1. Open the official Cloudflare dashboard: https://dash.cloudflare.com/ and choose the account containing the `golden-films` Pages project.
+2. Open **Workers & Pages → golden-films → Settings → Variables and Secrets** and select **Preview** only.
+3. Configure `SUPABASE_SERVICE_ROLE_KEY` as a server-side **Secret** and `ADMIN_SETUP_SECRET` as a separate strong Preview-only **Secret**. Never paste secrets into chat, source files, GitHub, client-side `VITE_*` variables, browser storage, or shared Postman environments.
+4. Confirm `SUPABASE_URL=https://lxaqpktmnjzbhtcityyc.supabase.co` and `SUPABASE_STORAGE_BUCKET=golden-films-media`.
+5. Trigger a Preview deployment for `feat/supabase-storage-free-tier` and wait for build and deployment success before runtime verification.
+
+If the dashboard does not offer the Secret type, stop. Never put a sensitive key into a plain-text variable as a workaround.
 
 ## Current prerequisite status
 
@@ -169,3 +171,13 @@ Reviewed `src/App.tsx` and `src/data.ts` only; this is not a device/browser visu
 - [x] When Storage cleanup succeeds (or the upload never created an object), the handler still attempts to release the reserved quota. A quota-release failure is now logged for operator follow-up instead of being silently swallowed.
 - [ ] CI/typecheck and regression tests for this code change are pending. Do not mark this fix fully verified until the commit checks pass and an injected cleanup-failure test covers the branch.
 - [ ] This source-level fix does not add a dedicated delete endpoint and does not unblock real Storage checks; Preview Storage configuration remains on hold.
+
+
+## Latest media-compensation CI confirmation (2026-10-31, commit b773389)
+
+- [x] GitHub Actions `build-and-test` passed for commit `b77338991a407fa5aca5314a113b4daf8c817dd0` (run [#41219848846](https://github.com/pkdiv6548/Photography/actions/runs/41219848846)).
+- [x] Cloudflare Pages reports a successful Preview deployment for that commit (immutable URL: https://5fb93fc3.golden-films.pages.dev; branch alias: https://feat-supabase-storage-free-t.golden-films.pages.dev).
+- [x] Follow-up documentation commit `777b246dc7457259b38bb35aab5e86845f87b090` also passed its configured `build-and-test` checks (runs [#41219857597](https://github.com/pkdiv6548/Photography/actions/runs/41219857597) and [#41219853455](https://github.com/pkdiv6548/Photography/actions/runs/41219853455)).
+- [ ] Passing CI does not yet prove the new `media_upload_cleanup_pending` failure branch; an injected cleanup-failure regression test remains open.
+- [ ] A dedicated safe media-delete endpoint and live Storage verification remain incomplete. Storage verification stays blocked under the explicit service-role-key hold.
+- [ ] No PR was merged and no Production D1, secret, schema, or live Storage write was changed.
