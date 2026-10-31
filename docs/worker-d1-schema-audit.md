@@ -153,3 +153,13 @@ A fresh Cloudflare D1 API query selected `name`, `type`, and `sql` from `sqlite_
 ### Operational decision
 
 This is catalog-level evidence only. It does not establish that API routes are active, secrets are configured, the current Preview deployment is healthy at runtime, or Supabase Storage can upload/read/delete objects. Keep PRs #63 and #87 as Draft; do not apply a migration or enable Production API routing until a verified backup has been restored to a disposable D1, the exact migration has been tested against that restore, and Preview smoke tests have passed.
+
+
+## Media-upload rollback regression follow-up — 2026-10-31
+
+- Commit `0cf0298d772a41fafab12ba047b7eefa79b022d1` adds a regression test for a failed Supabase Storage upload: the request returns a controlled 503, the monthly quota reservation is released, and no object-delete request is sent when upload never succeeded.
+- GitHub Actions run [#410](https://github.com/pkdiv6548/Photography/actions/runs/41198829664) completed successfully. Typecheck, Worker API regression tests (including this new failure-path test), forward-migration fixture, fresh-schema Worker contract fixture, and frontend production build all passed.
+- Cloudflare Pages successfully built and deployed this branch commit as Preview: https://6c91e5f2.golden-films.pages.dev . This proves the Pages build/deploy pipeline completed, not that the website or API passed live runtime smoke tests.
+- The current Preview project configuration reports a D1 binding and Supabase URL/bucket name, but the service-role key is not present in the reported Preview environment configuration and `ADMIN_SETUP_SECRET` has no configured value. Do not expose or paste secrets into chat or source control.
+- The runtime probe from the available verification environment is blocked by outbound-request policy, so health/readiness and browser workflows remain unverified here.
+- PR #87 remains open and Draft. No Production migration, secret change, or production deployment was performed. Continue to require a verified backup restored to disposable D1, exact migration testing against that restore, configured Preview-only secrets, and permitted runtime smoke tests before considering rollout.
