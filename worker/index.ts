@@ -385,7 +385,9 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
         return json({ error: "initial_setup_already_completed" }, 409);
       }
       return json({ ok: true, message: "Initial owner created. Sign in to continue." }, 201);
-    } catch {
+    } catch (error) {
+      // Log the database/runtime cause for Preview debugging; never return it to the browser.
+      console.error("[admin-setup] owner creation failed", error instanceof Error ? error.message : String(error));
       return json({ error: "admin_setup_unavailable" }, 503);
     }
   }
