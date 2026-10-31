@@ -8,7 +8,7 @@ MIGRATIONS = sorted((ROOT / "migrations").glob("*.sql"))
 BRIDGE = ROOT / "migrations" / "0006_worker_schema_compat.sql"
 
 REQUIRED_COLUMNS = {
-    "categories": {"id", "slug", "sort_order", "title_en", "title_hi"},
+    "categories": {"id", "slug", "sort_order", "title_en", "title_hi", "description_en", "description_hi"},
     "projects": {"id", "slug", "category_slug", "cover_image_url", "status", "is_featured", "project_date", "updated_at", "demo_label"},
     "project_translations": {"project_id", "locale", "title", "description"},
     "project_media": {"id", "project_id", "media_type", "preview_url", "original_key", "alt_en", "alt_hi", "sort_order", "is_public"},
@@ -109,10 +109,14 @@ def main():
         raise AssertionError(f"Missing required foreign keys: {sorted(missing_foreign_keys)}")
 
     category = db.execute(
-        "SELECT title_en, title_hi FROM categories WHERE slug='wedding-photography'"
+        "SELECT title_en, title_hi, description_en, description_hi FROM categories WHERE slug='wedding-photography'"
     ).fetchone()
     assert category and category["title_en"] == "Wedding Photography", category
     assert category["title_hi"] == "शादी की फोटोग्राफी", category
+    assert category["description_en"] == "" and category["description_hi"] == "", category
+    for column in ("description_en", "description_hi"):
+        info = next(row for row in db.execute("PRAGMA table_info(categories)") if row["name"] == column)
+        assert info["notnull"] == 1 and info["dflt_value"] == "''", (column, info["notnull"], info["dflt_value"])
 
     project = db.execute(
         "SELECT category_slug, cover_image_url, is_featured, project_date FROM projects WHERE id='project-test'"
