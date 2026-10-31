@@ -50,7 +50,29 @@ test("readiness endpoint accepts the required legacy-compatible schema", async (
   };
   const response = await worker.fetch(new Request("https://example.test/api/ready"), { DB: db });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "ready", schema: "legacy-compatible", adminSetupSecretConfigured: false, adminSetupComplete: false, adminCount: 0, blockers: ["admin_setup_secret_missing"] });
+  assert.deepEqual(await response.json(), {
+    status: "ready",
+    schema: "legacy-compatible",
+    adminSetupSecretConfigured: false,
+    supabaseStorageConfigured: false,
+    adminSetupComplete: false,
+    adminCount: 0,
+    blockers: ["admin_setup_secret_missing", "supabase_storage_not_configured"],
+  });
+
+  const configuredResponse = await worker.fetch(new Request("https://example.test/api/ready"), {
+    DB: db,
+    ADMIN_SETUP_SECRET: "test-only-admin-setup-secret",
+    SUPABASE_URL: "https://project.example.test",
+    SUPABASE_SERVICE_ROLE_KEY: "test-only-service-role-secret",
+    SUPABASE_STORAGE_BUCKET: "golden-films-media",
+  });
+  assert.equal(configuredResponse.status, 200);
+  const configuredBody = await configuredResponse.text();
+  assert.ok(configuredBody.includes('"adminSetupSecretConfigured":true'));
+  assert.ok(configuredBody.includes('"supabaseStorageConfigured":true'));
+  assert.ok(!configuredBody.includes("test-only-admin-setup-secret"), "readiness must never disclose admin setup secret");
+  assert.ok(!configuredBody.includes("test-only-service-role-secret"), "readiness must never disclose Supabase service key");
 
   // The login handler updates this column; readiness must reject a schema that lacks it.
   schema.admin_users = schema.admin_users.filter(name => name !== "last_login_at");
