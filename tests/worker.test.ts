@@ -1168,3 +1168,94 @@ test("admin logout rejects unauthenticated requests without clearing a session c
   assert.deepEqual(await response.json(), { error: "unauthorized" });
   assert.equal(response.headers.get("set-cookie"), null);
 });
+
+
+test("admin portfolio list requires an authenticated session", async () => {
+  let databaseAccessed = false;
+  const db = {
+    prepare(_query: string) {
+      databaseAccessed = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects", { method: "GET" }),
+    { DB: db },
+  );
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+  assert.equal(databaseAccessed, false, "unauthenticated requests should not query portfolio data");
+});
+
+test("admin portfolio save rejects invalid slug and unsafe cover URL before database writes", async () => {
+  let databaseAccessed = false;
+  const db = {
+    prepare(_query: string) {
+      databaseAccessed = true;
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slug: "../unsafe",
+        categorySlug: "wedding-photography",
+        titleEn: "Wedding",
+        titleHi: "शादी",
+        descriptionEn: "",
+        descriptionHi: "",
+        coverImageUrl: "http://127.0.0.1/private.jpg",
+        status: "draft",
+      }),
+    }),
+    { DB: db },
+  );
+  assert.equal(response.status, 401, "authentication must be checked before portfolio mutations");
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+  assert.equal(databaseAccessed, false, "unauthenticated invalid payload must not access the database");
+});
+
+test("admin portfolio save validates slug, status, and cover URL for authenticated users", async () => {
+  const db = {
+    prepare(_query: string) {
+      return {
+        bind(..._args: unknown[]) { return this; },
+        async first<T>() { return null as T | null; },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+        async all<T>() { return { success: true, results: [] as T[] }; },
+      };
+    },
+  };
+  const response = await worker.fetch(
+    new Request("https://example.test/api/admin/projects/save", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: "__Host-gf_admin=invalid-session-token",
+      },
+      body: JSON.stringify({
+        slug: "../unsafe",
+        categorySlug: "wedding-photography",
+        titleEn: "Wedding",
+        titleHi: "शादी",
+        coverImageUrl: "http://127.0.0.1/private.jpg",
+        status: "published",
+      }),
+    }),
+    { DB: db },
+  );
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+});
