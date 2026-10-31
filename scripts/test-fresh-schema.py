@@ -71,11 +71,11 @@ def main():
     )
     db.execute(
         "INSERT INTO media (id, project_id, object_key, media_type, mime_type, size_bytes, is_public_preview, created_at) "
-        "VALUES ('media-test', 'project-test', 'projects/test/photo.jpg', 'image', 'image/jpeg', 100, 1, '2026-10-30T10:00:00.000Z')
+        "VALUES ('media-test', 'project-test', 'projects/test/photo.jpg', 'image', 'image/jpeg', 100, 1, '2026-10-30T10:00:00.000Z')"
     )
     db.execute(
         "INSERT INTO media (id, project_id, object_key, media_type, mime_type, size_bytes, is_public_preview, created_at) "
-        "VALUES ('media-private-video', 'project-test', 'projects/test/clip.mp4', 'video', 'video/mp4', 250, 0, '2026-10-30T11:00:00.000Z')
+        "VALUES ('media-private-video', 'project-test', 'projects/test/clip.mp4', 'video', 'video/mp4', 250, 0, '2026-10-30T11:00:00.000Z')"
     )
     db.commit()
     db.executescript(BRIDGE.read_text(encoding="utf-8"))
