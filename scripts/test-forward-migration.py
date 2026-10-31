@@ -23,8 +23,6 @@ CREATE TABLE categories (
   sort_order INTEGER NOT NULL DEFAULT 0,
   title_en TEXT NOT NULL,
   title_hi TEXT NOT NULL,
-  description_en TEXT NOT NULL DEFAULT '',
-  description_hi TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE projects (
@@ -133,7 +131,7 @@ CREATE INDEX idx_projects_status_featured ON projects(status, is_featured, updat
 # Capture all legacy values. The only changed legacy table is enquiries, where
 # consent is added and email becomes nullable; all original columns must survive.
 PRESERVATION_QUERIES = {
-    "categories": "SELECT id, slug, sort_order, title_en, title_hi, description_en, description_hi, created_at FROM categories ORDER BY id",
+    "categories": "SELECT id, slug, sort_order, title_en, title_hi, created_at FROM categories ORDER BY id",
     "projects": "SELECT id, slug, category_slug, cover_image_url, status, is_featured, location, project_date, demo_label, created_at, updated_at FROM projects ORDER BY id",
     "project_translations": "SELECT project_id, locale, title, description FROM project_translations ORDER BY project_id, locale",
     "project_media": "SELECT id, project_id, media_type, preview_url, original_key, alt_en, alt_hi, sort_order, is_public, created_at FROM project_media ORDER BY id",
@@ -165,8 +163,8 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
         self.db.row_factory = sqlite3.Row
         self.db.executescript(BASELINE_SCHEMA)
         self.db.executescript("""
-          INSERT INTO categories (id, slug, sort_order, title_en, title_hi, description_en, description_hi)
-          VALUES ('wedding-id', 'wedding', 1, 'Wedding', 'शादी', 'Wedding work', 'शादी का काम');
+          INSERT INTO categories (id, slug, sort_order, title_en, title_hi)
+          VALUES ('wedding-id', 'wedding', 1, 'Wedding', 'शादी');
           INSERT INTO projects (id, slug, category_slug, cover_image_url, status, is_featured, location, project_date, demo_label)
           VALUES ('project-1', 'sample-project', 'wedding', 'https://example.test/cover.jpg', 'published', 1, 'Jaipur', '2026-10-20', 'Sample only');
           INSERT INTO project_translations (project_id, locale, title, description)
@@ -209,6 +207,17 @@ class ForwardMigrationFixtureTest(unittest.TestCase):
             after,
             before,
             "migration must preserve every captured legacy column value, not only row counts",
+        )
+
+        category_columns = {row["name"]: row for row in self.db.execute("PRAGMA table_info(categories)")}
+        self.assertIn("description_en", category_columns)
+        self.assertIn("description_hi", category_columns)
+        self.assertEqual(category_columns["description_en"]["notnull"], 1)
+        self.assertEqual(category_columns["description_hi"]["notnull"], 1)
+        self.assertEqual(
+            self.db.execute("SELECT description_en, description_hi FROM categories WHERE id='wedding-id'").fetchone(),
+            ("", ""),
+            "existing categories must receive safe empty-string defaults for new description columns",
         )
 
         columns = {row["name"]: row for row in self.db.execute("PRAGMA table_info(enquiries)")}
