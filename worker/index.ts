@@ -361,13 +361,14 @@ async function handleAdminAuth(request: Request, env: Env, url: URL): Promise<Re
     }
     const id = crypto.randomUUID();
     const salt = crypto.getRandomValues(new Uint8Array(16));
-    let setupStage = "derive_password_and_prepare_statements";
+    let setupStage = "password_derivation";
     try {
       // D1 batch executes the statements transactionally. Each follow-up statement
       // is conditional on the owner insert, so a repeated setup cannot mark setup
       // complete or emit an audit row without creating the initial owner.
       const passwordHash = await deriveAdminPassword(password, salt);
       const passwordSalt = toBase64Url(salt);
+      setupStage = "prepare_database_statements";
       const statements = [
         env.DB.prepare(
           "INSERT INTO admin_users (id, email, password_hash, password_salt, role, is_active) " +
